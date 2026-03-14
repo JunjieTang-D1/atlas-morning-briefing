@@ -152,10 +152,16 @@ bedrock:
   region: "us-east-1"
   temperature: 0.3
   max_tokens: 2048
+  # Use cross-region inference profile IDs (us.*) for broad region support.
+  # On-demand IDs (e.g. amazon.nova-lite-v1:0) may not work in all regions.
   models:
     heavy: "us.anthropic.claude-sonnet-4-20250514-v1:0"
-    medium: "us.anthropic.claude-sonnet-4-20250514-v1:0"
-    light: "amazon.nova-lite-v1:0"
+    medium: "us.amazon.nova-pro-v1:0"
+    light: "us.amazon.nova-lite-v1:0"
+  # Maximum LLM calls per run (default: 20). The intelligence layer makes
+  # ~10-15 calls with default settings. Increase if you have many papers or
+  # enable all intelligence features.
+  max_calls_per_run: 25
 
 # Logging
 log_level: "INFO"

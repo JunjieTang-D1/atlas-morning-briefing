@@ -104,7 +104,10 @@ class TestCalculateTopicMatch:
 
 class TestCalculateRecencyScore:
     def test_recent_paper_scores_high(self, default_scorer):
-        paper = {"published": "2026-03-06T00:00:00Z"}
+        # Use today's date so this test doesn't become stale over time
+        from datetime import datetime, timezone
+        today = datetime.now(timezone.utc).strftime("%Y-%m-%dT00:00:00Z")
+        paper = {"published": today}
         score = default_scorer.calculate_recency_score(paper)
         assert score > 0.9
 

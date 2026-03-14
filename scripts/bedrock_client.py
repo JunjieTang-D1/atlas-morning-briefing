@@ -26,11 +26,13 @@ logger = logging.getLogger(__name__)
 class BedrockClient:
     """Client for Amazon Bedrock model inference with tiered model support."""
 
-    # Default model IDs for each tier
+    # Default model IDs for each tier.
+    # Use cross-region inference profile IDs (us.*) for broad region support.
+    # On-demand IDs (e.g. amazon.nova-lite-v1:0) are not available in all regions.
     DEFAULT_MODELS = {
-        "heavy": "us.anthropic.claude-opus-4-6-v1",
-        "medium": "us.anthropic.claude-opus-4-6-v1",
-        "light": "us.anthropic.claude-opus-4-6-v1",
+        "heavy": "us.anthropic.claude-sonnet-4-20250514-v1:0",
+        "medium": "us.amazon.nova-pro-v1:0",
+        "light": "us.amazon.nova-lite-v1:0",
     }
 
     def __init__(self, config: Optional[Dict[str, Any]] = None):
