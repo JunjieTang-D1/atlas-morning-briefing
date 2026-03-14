@@ -26,10 +26,10 @@ triggers:
 requires:
   python: ">=3.10"
   env:
-    required: []
-    optional:
+    required:
       - FINNHUB_API_KEY
       - BRAVE_API_KEY
+    optional:
       - GMAIL_USER
       - GMAIL_APP_PASSWORD
       - AWS_ACCESS_KEY_ID
@@ -331,6 +331,16 @@ When Bedrock is enabled, reproduction assessment includes specific compute estim
 - Finnhub: Free tier allows 60 calls/minute
 - Brave Search: Check your plan limits
 - Rate limiting is built-in (0.5s delay between Finnhub calls, 1.0s between Brave calls)
+
+### LLM call budget exhausted
+- The intelligence layer has a per-run call budget (default: 20 calls)
+- With all features enabled and many papers, this can be exceeded
+- Increase via `bedrock.max_calls_per_run` in config.yaml:
+  ```yaml
+  bedrock:
+    max_calls_per_run: 30
+  ```
+- Typical usage: ~10-15 calls with default settings
 
 ### Bedrock errors
 - Verify AWS credentials are configured
