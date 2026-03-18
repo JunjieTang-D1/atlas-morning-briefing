@@ -216,6 +216,7 @@ class EmailDistributor:
         kindle_email: str,
         pdf_path: str,
         subject: Optional[str] = None,
+        extra_pdfs: Optional[List[str]] = None,
     ) -> bool:
         """
         Send PDF to Kindle via email.
@@ -226,6 +227,7 @@ class EmailDistributor:
             kindle_email: Kindle email address.
             pdf_path: Path to PDF file.
             subject: Email subject (defaults to filename).
+            extra_pdfs: Optional list of additional PDF paths to attach.
 
         Returns:
             True if sent successfully.
@@ -250,12 +252,26 @@ class EmailDistributor:
 
             msg.attach(MIMEText("Morning Briefing", "plain"))
 
+            # Attach main briefing PDF
             with open(pdf_file, "rb") as f:
                 attachment = MIMEApplication(f.read(), _subtype="pdf")
                 attachment.add_header(
                     "Content-Disposition", "attachment", filename=pdf_file.name
                 )
                 msg.attach(attachment)
+
+            # Attach downloaded paper PDFs
+            for extra in (extra_pdfs or []):
+                extra_file = Path(extra)
+                if extra_file.exists() and extra_file.stat().st_size > 1000:
+                    with open(extra_file, "rb") as f:
+                        att = MIMEApplication(f.read(), _subtype="pdf")
+                        att.add_header(
+                            "Content-Disposition", "attachment",
+                            filename=extra_file.name,
+                        )
+                        msg.attach(att)
+                    logger.info(f"Attached paper: {extra_file.name}")
 
             with self._connect_smtp() as server:
                 server.send_message(msg)
@@ -362,6 +378,7 @@ class EmailDistributor:
         pdf_path: Optional[str] = None,
         subject: Optional[str] = None,
         dry_run: bool = False,
+        extra_pdfs: Optional[List[str]] = None,
     ) -> Dict[str, bool]:
         """
         Distribute briefing to all configured channels.
@@ -372,6 +389,7 @@ class EmailDistributor:
             pdf_path: Path to generated PDF.
             subject: Email subject.
             dry_run: If True, skip actual sending.
+            extra_pdfs: Optional list of additional PDF paths to attach to Kindle.
 
         Returns:
             Dictionary mapping channel/email -> success boolean.
@@ -382,11 +400,11 @@ class EmailDistributor:
             logger.info("Dry run: skipping all email distribution")
             return results
 
-        # Kindle (PDF)
+        # Kindle (PDF + optional paper attachments)
         kindle_email = config.get("kindle_email")
         if kindle_email and pdf_path:
             results[f"kindle:{kindle_email}"] = self.send_kindle(
-                kindle_email, pdf_path, subject
+                kindle_email, pdf_path, subject, extra_pdfs=extra_pdfs,
             )
 
         # Email list (HTML)

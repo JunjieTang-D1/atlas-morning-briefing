@@ -36,7 +36,7 @@ from scripts.email_distributor import EmailDistributor
 from scripts.config_validator import validate_config, check_environment
 from scripts.bedrock_client import BedrockClient
 from scripts.intelligence import BriefingIntelligence
-
+from scripts.paper_downloader import PaperDownloader
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 logger = logging.getLogger(__name__)
@@ -732,17 +732,20 @@ class BriefingRunner:
             return False
 
     def distribute_briefing(
-        self, markdown_content: str, pdf_path: str, subject: str
+        self, markdown_content: str, pdf_path: str, subject: str,
+        paper_pdfs: Optional[List[str]] = None,
     ) -> Dict[str, bool]:
         """
         Distribute briefing to all configured channels.
 
         Sends PDF to Kindle + rich HTML to email recipients.
+        Optionally attaches downloaded paper PDFs to the Kindle email.
 
         Args:
             markdown_content: Markdown briefing content.
             pdf_path: Path to generated PDF.
             subject: Email subject / filename.
+            paper_pdfs: Optional list of downloaded paper PDF paths.
 
         Returns:
             Dictionary mapping channel -> success boolean.
@@ -770,6 +773,7 @@ class BriefingRunner:
                 pdf_path=pdf_path,
                 subject=subject,
                 dry_run=self.dry_run,
+                extra_pdfs=paper_pdfs,
             )
 
             # Update status
@@ -789,6 +793,7 @@ class BriefingRunner:
             logger.error(f"Distribution failed: {e}")
             self.errors.append(f"Distribution: {e}")
             return {}
+
 
     def save_status(self, output_dir: str = ".") -> None:
         """
@@ -949,9 +954,27 @@ class BriefingRunner:
         # --- Score papers (combines TF-IDF + semantic if available) ---
         top_papers = self.score_papers(papers)
 
+        # --- Download top-scoring papers if configured ---
+        downloaded_paper_paths = []
+        dl_config = self.config.get("auto_download", {})
+        if dl_config.get("enabled", False):
+            downloader = PaperDownloader(
+                output_dir=dl_config.get("output_dir", "paper_downloads"),
+                min_score=dl_config.get("min_score", 8.0),
+                max_papers=dl_config.get("max_papers", 5),
+            )
+            dl_results = downloader.download_papers(top_papers)
+            downloaded_paper_paths = [
+                r["path"] for r in dl_results if r["success"] and r["path"]
+            ]
+            self.status["papers_downloaded"] = len(downloaded_paper_paths)
+            if downloaded_paper_paths:
+                logger.info(f"Auto-downloaded {len(downloaded_paper_paths)} paper PDFs")
+
         # --- Intelligence layer: assess top papers & synthesize ---
         if self.intelligence.available:
-            top_papers = self.intelligence.assess_reproduction_feasibility(top_papers)
+            # Skip this for AI Sec not relevant
+            #top_papers = self.intelligence.assess_reproduction_feasibility(top_papers)
 
             # Ensure top 3 papers all have summaries (batched)
             top_papers = self._ensure_paper_summaries(top_papers[:3]) + top_papers[3:]
@@ -1038,8 +1061,11 @@ class BriefingRunner:
             return 2
 
         # --- Distribute to all channels (Kindle PDF + HTML email) ---
-        self.distribute_briefing(markdown_content, pdf_path, filename)
-
+        self.distribute_briefing(
+            markdown_content, pdf_path, filename,
+            paper_pdfs=downloaded_paper_paths,
+        )
+        
         # --- Save state for cross-day tracking ---
         # Save updated trending_topics and weekly_items from current run
         self._save_state(

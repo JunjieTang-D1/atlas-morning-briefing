@@ -18,9 +18,9 @@ logger = logging.getLogger(__name__)
 
 
 SYSTEM_PROMPT = (
-    "You are an AI research analyst generating a daily morning briefing. "
+    "You are an AI Security research analyst generating a daily morning briefing. "
     "Be concise, insightful, and factual. Use markdown formatting. "
-    "Do not invent facts or citations. If information is insufficient, say so. Transalte the Summary into German."
+    "Do not invent facts or citations. If information is insufficient, say so. Provide the Summary in German."
 )
 
 
@@ -186,7 +186,7 @@ class BriefingIntelligence:
         papers_block = "\n\n".join(paper_lines)
 
         prompt = (
-            "You are filtering papers for a daily AI research briefing. "
+            "You are filtering papers for a daily AI Security research briefing. "
             "Score each paper 1-10 for relevance to this interest profile:\n\n"
             f"<interest_profile>\n{profile_str}\n</interest_profile>\n\n"
             f"<papers>\n{papers_block}\n</papers>\n\n"
@@ -274,7 +274,7 @@ class BriefingIntelligence:
         static_queries_str = "\n".join(f"- {q}" for q in static_queries)
 
         prompt = (
-            "You are generating follow-up news queries based on yesterday's AI research briefing.\n\n"
+            "You are generating follow-up news queries based on yesterday's AI Security research briefing.\n\n"
             f"<yesterday_briefing>\n{context_str}\n</yesterday_briefing>\n\n"
             f"<static_queries>\n{static_queries_str}\n</static_queries>\n\n"
             "Generate 3 targeted follow-up queries to track developments in yesterday's hot topics. "
@@ -617,8 +617,8 @@ class BriefingIntelligence:
 
         articles_block = "\n".join(news_lines)
         prompt = (
-            "You are curating a daily AI/tech briefing. From these news articles, "
-            "select the TOP 5 most important for an AI researcher/engineer.\n\n"
+            "You are curating a daily AI/tech Security briefing. From these news articles, "
+            "select the TOP 5 most important for an AI Security researcher/engineer.\n\n"
             f"<interests>{', '.join(topics[:5])}</interests>\n\n"
             f"<articles>\n{articles_block}\n</articles>\n\n"
             "For each of your top 5 picks, respond in this exact format:\n"
@@ -652,7 +652,7 @@ class BriefingIntelligence:
         # Retry once with simpler prompt
         logger.warning(f"News ranking parse failed (attempt 1). LLM response: {result[:300]}")
         retry_result = self.bedrock.invoke(
-            f"From these articles, pick the 5 most important for an AI researcher. "
+            f"From these articles, pick the 5 most important for an AI Security researcher. "
             f"Format EXACTLY as: [number] summary sentence.\n\n{articles_block}",
             tier="medium", max_tokens=800, system_prompt=SYSTEM_PROMPT
         )
@@ -703,8 +703,8 @@ class BriefingIntelligence:
 
         blogs_block = "\n".join(blog_lines)
         prompt = (
-            "You are curating a daily AI/tech briefing. From these blog posts, "
-            "select the TOP 5 most relevant for an AI researcher/engineer.\n\n"
+            "You are curating a daily AI/tech Security briefing. From these blog posts, "
+            "select the TOP 5 most relevant for an AI Security researcher/engineer.\n\n"
             f"<interests>{', '.join(topics[:5])}</interests>\n\n"
             f"<blogs>\n{blogs_block}\n</blogs>\n\n"
             "For each of your top 5 picks, respond in this exact format:\n"
@@ -1011,7 +1011,7 @@ class BriefingIntelligence:
             )
 
         prompt = (
-            "You are writing a daily AI research + market briefing. "
+            "You are writing a daily AI Security research + market briefing. "
             "Based on today's data below, write a 3-5 sentence executive summary "
             "highlighting today's key theme, most notable findings, and connections "
             "across papers, news, and blogs. "
@@ -1302,7 +1302,7 @@ class BriefingIntelligence:
         context_str = "\n\n".join(context_parts)
 
         prompt = (
-            "You are writing a 'This Week in AI' section for a weekly research briefing. "
+            "You are writing a 'This Week in AI Security' section for a weekly research briefing. "
             "Based on this week's papers, blogs, and news below, synthesize a narrative that:\n\n"
             "1. Identifies the 3 biggest themes of the week\n"
             "2. Explains why they matter (implications for researchers/engineers)\n"

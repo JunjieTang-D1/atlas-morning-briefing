@@ -23,6 +23,7 @@ RUN poetry install --only main --no-root
 
 # Copy application code and install the project itself
 COPY scripts/ scripts/
+COPY README.md .
 RUN poetry install --only main
 
 # Copy entrypoint
