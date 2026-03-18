@@ -1,6 +1,6 @@
 ---
 name: morning-briefing
-description: Generate a daily AI research + market + news briefing. Use when setting up automated morning briefings, research digests, or daily knowledge feeds. Covers arxiv papers, tech blogs, stock watchlist, industry news, and paper recommendations. Outputs Kindle PDF + channel message. Configurable topics, sources, stocks, and delivery schedule. Optionally uses Amazon Bedrock for AI-powered synthesis and summarization.
+description: Generate a daily security research + market + news briefing. Use when setting up automated morning briefings, research digests, or daily knowledge feeds. Covers arxiv papers, tech blogs, stock watchlist, industry news, and paper recommendations. Outputs Kindle PDF + channel message. Configurable topics, sources, stocks, and delivery schedule. Optionally uses Amazon Bedrock for AI-powered synthesis and summarization.
 inputs:
   config_path:
     type: string

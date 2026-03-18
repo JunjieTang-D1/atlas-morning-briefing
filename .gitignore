@@ -45,3 +45,4 @@ logs/*.log
 !examples/*.md
 !references/*.md
 atlas-morning-briefing.json
+scripts/.DS_Store

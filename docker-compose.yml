@@ -1,0 +1,37 @@
+services:
+  atlas-briefing:
+    build: .
+    container_name: atlas-briefing
+    restart: unless-stopped
+    volumes:
+      - ./config.yaml:/app/config/config.yaml:ro
+      - ./logs:/app/logs
+    environment:
+      # Cron schedule (default: daily at 6:50 AM)
+      CRON_SCHEDULE: "50 6 * * *"
+
+      # Set to "true" to run the briefing once when the container starts
+      RUN_ON_START: "false"
+
+      # Set to "true" to skip email delivery
+      DRY_RUN: "false"
+
+      # Logging level: DEBUG, INFO, WARNING, ERROR
+      LOG_LEVEL: "INFO"
+
+      # API keys
+      FINNHUB_API_KEY: "${FINNHUB_API_KEY}"
+      BRAVE_API_KEY: "${BRAVE_API_KEY}"
+
+      # Gmail delivery
+      GMAIL_USER: "${GMAIL_USER}"
+      GMAIL_APP_PASSWORD: "${GMAIL_APP_PASSWORD}"
+
+      # AWS credentials (for Bedrock)
+      AWS_ACCESS_KEY_ID: "${AWS_ACCESS_KEY_ID}"
+      AWS_SECRET_ACCESS_KEY: "${AWS_SECRET_ACCESS_KEY}"
+      AWS_DEFAULT_REGION: "${AWS_DEFAULT_REGION:-eu-central-1}"
+
+      # Optional: override the heavy-tier model with a full inference profile ARN
+      # e.g. arn:aws:bedrock:eu-central-1:123456789012:inference-profile/eu.anthropic.claude-opus-4-6-v1
+      BEDROCK_INFERENCE_PROFILE_ARN: "${BEDROCK_INFERENCE_PROFILE_ARN:-}"

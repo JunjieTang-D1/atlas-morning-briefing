@@ -24,16 +24,23 @@ logger = logging.getLogger(__name__)
 
 
 class BedrockClient:
-    """Client for Amazon Bedrock model inference with tiered model support."""
+    """Client for Amazon Bedrock model inference with tiered model support.
+
+    Supports model IDs, cross-region inference profile IDs (e.g. us.anthropic.*),
+    and full inference profile ARNs (arn:aws:bedrock:...:inference-profile/...).
+    """
 
     # Default model IDs for each tier.
     # Use cross-region inference profile IDs (us.*) for broad region support.
     # On-demand IDs (e.g. amazon.nova-lite-v1:0) are not available in all regions.
     DEFAULT_MODELS = {
-        "heavy": "us.anthropic.claude-sonnet-4-20250514-v1:0",
+        "heavy": "us.anthropic.claude-opus-4-6-v1",
         "medium": "us.amazon.nova-pro-v1:0",
         "light": "us.amazon.nova-lite-v1:0",
     }
+
+    # Known provider keywords for request/response format routing.
+    _PROVIDER_KEYWORDS = ["anthropic", "amazon.nova", "meta", "mistral", "cohere"]
 
     def __init__(self, config: Optional[Dict[str, Any]] = None):
         """
@@ -41,8 +48,8 @@ class BedrockClient:
 
         Args:
             config: Optional Bedrock configuration from config.yaml.
-                    Keys: region, models (dict of tier->model_id),
-                    max_tokens, temperature.
+                    Keys: region, models (dict of tier->model_id or inference profile ARN),
+                    max_tokens, temperature, inference_profile_arn (optional override).
         """
         config = config or {}
         self.region = config.get("region", os.environ.get("AWS_REGION", "us-east-1"))
@@ -50,7 +57,8 @@ class BedrockClient:
         self.max_tokens = config.get("max_tokens", 2048)
         self.temperature = config.get("temperature", 0.3)
 
-        # Model IDs per tier
+        # Model IDs per tier — values can be model IDs, inference profile IDs,
+        # or full inference profile ARNs.
         models_config = config.get("models", {})
         self.models = {
             "heavy": models_config.get("heavy", self.DEFAULT_MODELS["heavy"]),
@@ -58,10 +66,35 @@ class BedrockClient:
             "light": models_config.get("light", self.DEFAULT_MODELS["light"]),
         }
 
+        # Allow env var override for the heavy tier inference profile ARN.
+        # This lets operators swap models without touching config.yaml.
+        arn_override = os.environ.get("BEDROCK_INFERENCE_PROFILE_ARN")
+        if arn_override:
+            self.models["heavy"] = arn_override
+
         self.max_calls = config.get("max_calls_per_run", 20)
         self._call_count = 0
         self._client = None
         self._available = None
+
+    @staticmethod
+    def detect_provider(model_id: str) -> str:
+        """Detect the model provider from a model ID, inference profile ID, or ARN.
+
+        Works with all supported formats:
+          - On-demand:  anthropic.claude-opus-4-6-v1
+          - Cross-region: eu.anthropic.claude-opus-4-6-v1
+          - ARN: arn:aws:bedrock:us-east-1:123456:inference-profile/us.anthropic.claude-opus-4-6-v1
+
+        Returns:
+            Provider string ("anthropic", "amazon.nova", etc.) or "generic".
+        """
+        lowered = model_id.lower()
+        if "anthropic" in lowered:
+            return "anthropic"
+        if "amazon.nova" in lowered:
+            return "amazon.nova"
+        return "generic"
 
     @property
     def client(self):
@@ -205,8 +238,11 @@ class BedrockClient:
         Returns:
             Request body dictionary.
         """
-        if "anthropic" in model_id:
-            # Anthropic models use their own message format with "type" key
+        provider = self.detect_provider(model_id)
+
+        if provider == "anthropic":
+            # Anthropic models (Claude) use their own message format with "type" key.
+            # Works for on-demand IDs, cross-region profiles, and inference profile ARNs.
             messages = [{"role": "user", "content": [{"type": "text", "text": prompt}]}]
             body = {
                 "anthropic_version": "bedrock-2023-05-31",
@@ -216,7 +252,7 @@ class BedrockClient:
             }
             if system_prompt:
                 body["system"] = system_prompt
-        elif "amazon.nova" in model_id:
+        elif provider == "amazon.nova":
             # Nova models do NOT accept "type" key in content blocks
             # and use "max_new_tokens" (snake_case) not "maxNewTokens"
             messages = [{"role": "user", "content": [{"text": prompt}]}]
@@ -257,11 +293,13 @@ class BedrockClient:
         Returns:
             Extracted text string.
         """
-        if "anthropic" in model_id:
+        provider = self.detect_provider(model_id)
+
+        if provider == "anthropic":
             content = response_body.get("content", [])
             texts = [block.get("text", "") for block in content if block.get("type") == "text"]
             return "\n".join(texts)
-        elif "amazon.nova" in model_id:
+        elif provider == "amazon.nova":
             output = response_body.get("output", {})
             message = output.get("message", {})
             content = message.get("content", [])
