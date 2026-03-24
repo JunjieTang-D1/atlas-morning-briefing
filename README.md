@@ -2,31 +2,30 @@
 
 > **IMPORTANT NOTICE: This project is NOT production-ready. It is provided strictly for testing, experimentation, and educational purposes only. This code has NOT undergone AWS security review and is NOT intended for deployment in production environments or for use with real end-users. Use at your own risk. No guarantees are made regarding security, reliability, availability, or fitness for any particular purpose.**
 
-** This is a adjusted version to use Sonnet 4.6 and is scoped to AI Security realted topics! **
-
 A fully automated morning briefing pipeline that scans ArXiv papers, RSS blogs, stock tickers, and news headlines — then uses Amazon Bedrock to synthesize everything into a Kindle-optimized PDF delivered to your inbox before you wake up.
 
-Supports **Claude Sonnet 4, Kimi K2.5, GLM 4.7, DeepSeek V3.2, Nova Pro, and Nova Lite** on Amazon Bedrock. Switch models in one line of config. Runs without AWS credentials in deterministic mode at zero cost.
+Supports **Claude Opus 4.6, Claude Sonnet 4, Kimi K2.5, GLM 4.7, DeepSeek V3.2, Nova Pro, and Nova Lite** on Amazon Bedrock. Accepts inference profile ARNs for cross-region routing. Switch models in one line of config. Runs without AWS credentials in deterministic mode at zero cost.
 
 ## What It Does
 
 ```
 6:50 AM  ┌─ ArXiv API ──────── 60+ papers across 12 topic areas
-         ├─ RSS Feeds ──────── 22 blogs (Anthropic, Karpathy, BAIR, DeepMind...)
+         ├─ RSS Feeds ──────── 45 blogs (AI + cybersecurity)
          ├─ Finnhub API ────── Stock watchlist with OHLC data
          └─ Brave Search ───── 45+ news headlines from 10 queries
               │
               ▼
-         ┌─ Parallel fetch (3 threads) + deduplication
+         ┌─ Parallel fetch (4 threads) + deduplication
          ├─ TF-IDF + LLM semantic scoring for paper relevance
          ├─ Reproduction feasibility gate (5-dimension, scored /25)
+         ├─ Auto-download top papers as PDF from ArXiv
          ├─ Stock-news correlation (links price moves to headlines)
          ├─ Cross-source theme detection (papers × blogs × news)
          ├─ Editorial synthesis with today's key takeaway
          └─ Weekly deep dive (generated every Saturday)
               │
               ▼
-         Kindle PDF (6×8") → Gmail SMTP → Kindle + email list
+         Kindle PDF (6×8") + paper PDFs → Gmail SMTP → Kindle + email list
 ```
 
 ### Pipeline Steps
@@ -34,11 +33,12 @@ Supports **Claude Sonnet 4, Kimi K2.5, GLM 4.7, DeepSeek V3.2, Nova Pro, and Nov
 1. **Fetch** — ArXiv papers, RSS blogs, and stock quotes are fetched in parallel (3 threads). News queries run after optional dynamic query generation from the intelligence layer.
 2. **Deduplicate** — Same-day news/blog overlap removed by URL domain and title. Similar papers collapsed at >85% title similarity (SequenceMatcher). Cross-day dedup skips items from yesterday's briefing via `.atlas-state.json`.
 3. **Filter & Score** — Papers scored by a weighted formula: `has_code×7 + topic_match×3 + recency×2 + citation×1`, with infrastructure penalties for datacenter-scale or theory-only work. LLM semantic scoring optionally supplements TF-IDF.
-4. **Enrich** — Three parallel LLM calls: paper summarization + semantic scoring, news ranking, blog ranking. Then two more: stock-news correlation, emerging theme detection.
-5. **Assess** — Top papers evaluated for reproduction feasibility across 5 dimensions (code availability, data access, infrastructure needs, Bedrock compatibility, engineering effort), each scored 0-5. Papers below the configurable gate (default 12/25) are dropped.
-6. **Synthesize** — Cross-section editorial intro, market trend summary, and entity mention tracking for competitive intelligence.
-7. **Generate** — Markdown briefing rendered to a Kindle-optimized PDF (6×8 inches) with star ratings, reproduction badges, and stock color coding.
-8. **Deliver** — PDF sent to Kindle via Gmail SMTP. Rich HTML version (GitHub-styled, nh3-sanitized) sent to email distribution list.
+4. **Download** — Top-scoring papers (above configurable threshold) are automatically downloaded as PDFs from ArXiv and attached to the Kindle delivery email.
+5. **Enrich** — Three parallel LLM calls: paper summarization + semantic scoring, news ranking, blog ranking. Then two more: stock-news correlation, emerging theme detection.
+6. **Assess** — Top papers evaluated for reproduction feasibility across 5 dimensions (code availability, data access, infrastructure needs, Bedrock compatibility, engineering effort), each scored 0-5. Papers below the configurable gate (default 12/25) are dropped.
+7. **Synthesize** — Cross-section editorial intro, market trend summary, and entity mention tracking for competitive intelligence.
+8. **Generate** — Markdown briefing rendered to a Kindle-optimized PDF (6×8 inches) with star ratings, reproduction badges, and stock color coding.
+9. **Deliver** — Briefing PDF + downloaded paper PDFs sent to Kindle via Gmail SMTP. Rich HTML version (GitHub-styled, nh3-sanitized) sent to email distribution list.
 
 ## Architecture
 
@@ -49,6 +49,7 @@ Supports **Claude Sonnet 4, Kimi K2.5, GLM 4.7, DeepSeek V3.2, Nova Pro, and Nov
 ### Prerequisites
 
 - Python 3.10+
+- [Poetry](https://python-poetry.org/) (dependency management)
 - [Finnhub API key](https://finnhub.io/) (free tier)
 - [Brave Search API key](https://brave.com/search/api/) (free tier)
 - Gmail App Password (for Kindle/email delivery)
@@ -59,9 +60,7 @@ Supports **Claude Sonnet 4, Kimi K2.5, GLM 4.7, DeepSeek V3.2, Nova Pro, and Nov
 ```bash
 git clone https://github.com/your-org/atlas-morning-briefing.git
 cd atlas-morning-briefing
-python3 -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
+poetry install
 ```
 
 ### Configure
@@ -104,14 +103,31 @@ See `references/config_guide.md` for all configuration options.
 
 ```bash
 # Dry run — generates PDF locally, no email delivery
-python3 scripts/briefing_runner.py --config config.yaml --dry-run
+poetry run python3 scripts/briefing_runner.py --config config.yaml --dry-run
 
 # Full run — generates and delivers to Kindle + email list
-python3 scripts/briefing_runner.py --config config.yaml
+poetry run python3 scripts/briefing_runner.py --config config.yaml
 
 # Debug logging
-python3 scripts/briefing_runner.py --config config.yaml --log-level DEBUG
+poetry run python3 scripts/briefing_runner.py --config config.yaml --log-level DEBUG
 ```
+
+### Docker
+
+```bash
+# Create your .env file
+cp .env.example .env
+# Edit .env with your API keys
+
+# Build and run
+docker compose up -d
+
+# Check logs
+docker compose logs -f
+tail -f logs/briefing.log
+```
+
+The container runs on a cron schedule (configurable via `CRON_SCHEDULE` env var). Set `RUN_ON_START=true` to trigger an immediate run on container start.
 
 ### Schedule (cron)
 
@@ -127,8 +143,12 @@ See `references/kindle_setup.md` for the wrapper script and Kindle email setup.
 ```
 atlas-morning-briefing/
 ├── config.yaml.example            # Template config (copy to config.yaml)
-├── pyproject.toml                 # Package metadata and dependencies
-├── requirements.txt               # Pinned dependencies
+├── pyproject.toml                 # Poetry package metadata and dependencies
+├── poetry.lock                    # Locked dependency versions
+├── Dockerfile                     # Container image (Poetry + cron)
+├── docker-compose.yml             # Container orchestration with env vars
+├── entrypoint.sh                  # Container entrypoint (cron setup)
+├── .env.example                   # Template for environment variables
 ├── scripts/
 │   ├── briefing_runner.py         # Main orchestrator — CLI, parallel fetch, markdown generation
 │   ├── arxiv_scanner.py           # ArXiv API client — parallel topic search (8 threads)
@@ -136,10 +156,12 @@ atlas-morning-briefing/
 │   ├── stock_fetcher.py           # Finnhub API client — quotes + company profiles
 │   ├── news_aggregator.py         # Brave Search API client — parallel (4 threads)
 │   ├── paper_scorer.py            # TF-IDF + heuristic paper scoring with infra penalties
+│   ├── paper_downloader.py        # ArXiv PDF downloader — auto-downloads top-scoring papers
 │   ├── intelligence.py            # LLM intelligence layer — 13 Bedrock-powered features
-│   ├── bedrock_client.py          # Amazon Bedrock client — tiered models, call budgeting
+│   ├── prompts.py                 # All LLM prompts in one place — edit to customize agent behavior
+│   ├── bedrock_client.py          # Amazon Bedrock client — tiered models, inference profiles, call budgeting
 │   ├── pdf_generator.py           # Markdown → PDF (ReportLab) — Kindle/A4/Letter formats
-│   ├── email_distributor.py       # Gmail SMTP — Kindle PDF + HTML email distribution
+│   ├── email_distributor.py       # Gmail SMTP — Kindle PDF + paper PDFs + HTML email distribution
 │   ├── config_validator.py        # Startup validation for config + environment variables
 │   └── __init__.py
 ├── tests/                         # 105 unit tests (pytest)
@@ -150,6 +172,9 @@ atlas-morning-briefing/
 │   ├── test_intelligence.py
 │   ├── test_paper_scorer.py
 │   └── test_pdf_generator.py
+├── .github/
+│   └── workflows/
+│       └── ci.yml                 # GitHub Actions — tests + bandit security scan
 ├── references/
 │   ├── config_guide.md            # Complete config reference
 │   └── kindle_setup.md            # Kindle email delivery setup
@@ -158,6 +183,7 @@ atlas-morning-briefing/
 ├── assets/
 │   └── architecture.svg           # Architecture diagram
 ├── logs/                          # Runtime logs (gitignored)
+├── paper_downloads/               # Auto-downloaded paper PDFs (gitignored)
 ├── CONTRIBUTING.md
 ├── SKILL.md
 └── LICENSE                        # MIT
@@ -169,7 +195,7 @@ The intelligence layer uses a **tiered model strategy** — heavier models for r
 
 | Tier | Used For | Example Models |
 |---|---|---|
-| **Heavy** | Editorial synthesis, stock-news correlation, weekly deep dive | Claude Sonnet 4, Kimi K2.5 |
+| **Heavy** | Editorial synthesis, stock-news correlation, weekly deep dive | Claude Opus 4.6, Kimi K2.5 |
 | **Medium** | Paper summaries, semantic scoring, news ranking, reproduction assessment | Claude Sonnet 4, GLM 4.7 |
 | **Light** | Topic expansion, blog ranking, emerging themes, trending tracking | Nova Lite, DeepSeek V3.2 |
 
@@ -191,6 +217,10 @@ The intelligence layer uses a **tiered model strategy** — heavier models for r
 | Trending Topics | Light | Tracks topics appearing across multiple days |
 | Weekly Deep Dive | Heavy | Saturday-only "This Week in AI" narrative (500-800 words) |
 
+### Prompt Management
+
+All LLM prompts live in `scripts/prompts.py`. Edit this single file to change how the agent reasons, what tone it uses, or what output format it produces — no need to touch the pipeline logic in `intelligence.py`.
+
 ### Switch Models
 
 Change one line in `config.yaml`:
@@ -198,17 +228,20 @@ Change one line in `config.yaml`:
 ```yaml
 bedrock:
   models:
-    heavy: "us.anthropic.claude-sonnet-4-20250514-v1:0"  # or any model below
+    heavy: "eu.anthropic.claude-opus-4-6-v1"  # or any model below
 ```
 
 | Model | Bedrock Model ID |
 |---|---|
+| Claude Opus 4.6 | `eu.anthropic.claude-opus-4-6-v1` |
 | Claude Sonnet 4 | `us.anthropic.claude-sonnet-4-20250514-v1:0` |
 | Kimi K2.5 | `moonshotai.kimi-k2.5` |
 | GLM 4.7 | `zai.glm-4.7` |
 | DeepSeek V3.2 | `deepseek.v3.2` |
 | Nova Pro | `amazon.nova-pro-v1:0` |
 | Nova Lite | `amazon.nova-lite-v1:0` |
+
+You can also pass a full inference profile ARN via the `BEDROCK_INFERENCE_PROFILE_ARN` environment variable to override the heavy tier at runtime.
 
 ### Disable Bedrock
 
@@ -220,6 +253,20 @@ bedrock:
 ```
 
 The pipeline still fetches data, scores papers via TF-IDF, generates the PDF, and delivers it — just without LLM summaries, synthesis, or semantic scoring.
+
+## Paper Auto-Download
+
+Top-scoring papers are automatically downloaded as PDFs from ArXiv and attached to the Kindle delivery email:
+
+```yaml
+auto_download:
+  enabled: true
+  min_score: 8.0
+  max_papers: 5
+  output_dir: "paper_downloads"
+```
+
+Downloaded PDFs are persisted in `paper_downloads/` (mounted as a Docker volume).
 
 ## Paper Scoring
 
@@ -265,7 +312,7 @@ Output formats: Markdown (`.md`), PDF (`.pdf`), and HTML email.
 | Gmail SMTP | Free | Kindle and email delivery |
 | Amazon Bedrock | ~$0.40-0.80/run (optional) | Intelligence features |
 
-**Monthly cost (daily runs):** $0 without Bedrock, ~$12-24 with Claude Sonnet 4, ~$2.45 with Nova Lite/Pro.
+**Monthly cost (daily runs):** $0 without Bedrock, ~$12-24 with Claude Opus 4.6, ~$2.45 with Nova Lite/Pro.
 
 ## Security
 
@@ -279,15 +326,24 @@ Output formats: Markdown (`.md`), PDF (`.pdf`), and HTML email.
 - YAML loaded with `safe_load` everywhere
 - No `eval()`, `exec()`, or `subprocess(shell=True)`
 - Bedrock call budget enforcement prevents runaway LLM costs
+- [Bandit](https://bandit.readthedocs.io/) security scanner runs on every commit via GitHub Actions
 
 ## Running Tests
 
 ```bash
-pip install -e ".[dev]"
-pytest tests/ -v
+poetry install
+poetry run pytest tests/ -v
 ```
 
 105 tests covering scanners, scoring, deduplication, PDF generation, intelligence layer, and config validation.
+
+## CI/CD
+
+GitHub Actions runs on every push and pull request:
+- **pytest** — full test suite
+- **bandit** — Python security vulnerability scanner
+
+See `.github/workflows/ci.yml`.
 
 ## Example Output
 
