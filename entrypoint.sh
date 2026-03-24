@@ -20,7 +20,6 @@ printenv | grep -v "no_proxy" > /etc/environment
 # Write cron job
 echo "$CRON_SCHEDULE root . /etc/environment; $RUN_CMD" > /etc/cron.d/briefing
 chmod 0644 /etc/cron.d/briefing
-crontab /etc/cron.d/briefing
 
 echo "Atlas Morning Briefing container started"
 echo "Schedule: $CRON_SCHEDULE"
