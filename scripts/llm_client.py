@@ -179,7 +179,20 @@ class LLMClient:
             resp = requests.post(url, headers=headers, json=body, timeout=120)
             resp.raise_for_status()
             data = resp.json()
+
+            # Check for API-level errors (MiniMax returns 200 with error object)
+            if data.get("type") == "error" or "error" in data:
+                err = data.get("error", {})
+                logger.warning(f"MiniMax API returned error: {err}")
+                return None
+
             text = self._extract_anthropic_text(data)
+            if not text.strip():
+                stop = data.get("stop_reason") or data.get("stop_sequence")
+                logger.warning(
+                    f"MiniMax returned empty content (stop_reason={stop})"
+                )
+                return None
             logger.info(f"MiniMax response received ({len(text)} chars)")
             return text
         except requests.RequestException as e:

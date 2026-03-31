@@ -161,9 +161,9 @@ llm:
   fallback:
     base_url: "https://openrouter.ai/api/v1/chat/completions"
     models:
-      heavy: "qwen/qwen3.6-plus-preview"
-      medium: "stepfun/step-3.5-flash"
-      light: "stepfun/step-3.5-flash"
+      heavy: "qwen/qwen3.6-plus-preview:free"
+      medium: "stepfun/step-3.5-flash:free"
+      light: "stepfun/step-3.5-flash:free"
 
 # Newsletter source (from n8n email-ingestion workflow via Supabase)
 # Fetches classified newsletter emails and includes them in the briefing
