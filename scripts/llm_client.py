@@ -152,6 +152,9 @@ class LLMClient:
         logger.error("All LLM providers failed")
         return None
 
+    # Minimum token budget for MiniMax M2.7 (reasoning model needs room to think + respond)
+    _MINIMAX_MIN_TOKENS = 4096
+
     def _invoke_minimax(
         self,
         prompt: str,
@@ -160,6 +163,8 @@ class LLMClient:
         system_prompt: Optional[str],
     ) -> Optional[str]:
         """Invoke MiniMax via native OpenAI-compatible API."""
+        # Reasoning model exhausts small budgets on <think> blocks; enforce a floor
+        max_tokens = max(max_tokens, self._MINIMAX_MIN_TOKENS)
         url = f"{self._primary_base_url}/v1/chat/completions"
         headers = {
             "Authorization": f"Bearer {self._primary_api_key}",
