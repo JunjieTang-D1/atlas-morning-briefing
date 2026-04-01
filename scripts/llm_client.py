@@ -10,6 +10,7 @@ Fallback: OpenRouter free models via OpenAI-compatible API.
 import json
 import logging
 import os
+import re
 from typing import Any, Dict, Optional
 
 import requests
@@ -23,7 +24,7 @@ class LLMClient:
 
     DEFAULT_PRIMARY = {
         "provider": "minimax",
-        "base_url": "https://api.minimax.io/anthropic",
+        "base_url": "https://api.minimax.io",
         "model": "MiniMax-M2.7",
     }
 
@@ -158,21 +159,23 @@ class LLMClient:
         temperature: float,
         system_prompt: Optional[str],
     ) -> Optional[str]:
-        """Invoke MiniMax via Anthropic-compatible API."""
-        url = f"{self._primary_base_url}/v1/messages"
+        """Invoke MiniMax via native OpenAI-compatible API."""
+        url = f"{self._primary_base_url}/v1/chat/completions"
         headers = {
-            "x-api-key": self._primary_api_key,
-            "content-type": "application/json",
-            "anthropic-version": "2023-06-01",
+            "Authorization": f"Bearer {self._primary_api_key}",
+            "Content-Type": "application/json",
         }
+        messages = []
+        if system_prompt:
+            messages.append({"role": "system", "content": system_prompt})
+        messages.append({"role": "user", "content": prompt})
+
         body: Dict[str, Any] = {
             "model": self._primary_model,
             "max_tokens": max_tokens,
             "temperature": temperature,
-            "messages": [{"role": "user", "content": prompt}],
+            "messages": messages,
         }
-        if system_prompt:
-            body["system"] = system_prompt
 
         try:
             logger.info(f"Invoking MiniMax: {self._primary_model}")
@@ -180,22 +183,28 @@ class LLMClient:
             resp.raise_for_status()
             data = resp.json()
 
-            # Check for API-level errors (MiniMax returns 200 with error object)
-            if data.get("type") == "error" or "error" in data:
-                err = data.get("error", {})
-                logger.warning(f"MiniMax API returned error: {err}")
+            if "error" in data:
+                logger.warning(f"MiniMax API returned error: {data['error']}")
                 return None
 
-            text = self._extract_anthropic_text(data)
-            if not text.strip():
-                stop = data.get("stop_reason") or data.get("stop_sequence")
-                logger.warning(
-                    f"MiniMax returned empty content (stop_reason={stop})"
-                )
+            choice = data["choices"][0]
+            finish_reason = choice.get("finish_reason")
+            text = choice["message"]["content"]
+
+            if text is None:
+                logger.warning(f"MiniMax returned None content (finish_reason={finish_reason})")
                 return None
-            logger.info(f"MiniMax response received ({len(text)} chars)")
+
+            # Strip <think>...</think> reasoning blocks
+            text = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL).strip()
+
+            if not text:
+                logger.warning(f"MiniMax returned empty content after stripping think blocks (finish_reason={finish_reason})")
+                return None
+
+            logger.info(f"MiniMax response received ({len(text)} chars, finish_reason={finish_reason})")
             return text
-        except requests.RequestException as e:
+        except (requests.RequestException, KeyError, IndexError) as e:
             logger.error(f"MiniMax API error: {e}")
             return None
 
