@@ -31,12 +31,12 @@ class GitHubTrendingScanner:
 
         Args:
             supabase_url: Supabase project URL.
-            supabase_key: Supabase service role key.
+            supabase_key: Supabase scoped API key.
             max_items: Maximum items to fetch.
         """
         self.supabase_url = supabase_url or os.environ.get("SUPABASE_URL", "")
         self.supabase_key = supabase_key or os.environ.get(
-            "SUPABASE_SERVICE_KEY", ""
+            "SUPABASE_API_KEY_N8N_ATLAS_MORNING_BRIEF", ""
         )
         self.max_items = max_items
 

@@ -167,7 +167,7 @@ llm:
 
 # Newsletter source (from n8n email-ingestion workflow via Supabase)
 # Fetches classified newsletter emails and includes them in the briefing
-# Env vars: SUPABASE_URL, SUPABASE_SERVICE_KEY
+# Env vars: SUPABASE_URL, SUPABASE_API_KEY_N8N_ATLAS_MORNING_BRIEF
 newsletter_source:
   enabled: false
   max_items: 20
@@ -175,7 +175,7 @@ newsletter_source:
 
 # GitHub trending repos (from n8n github-trending-digest workflow via Supabase)
 # Fetches trending repos stored in memory_entries table
-# Env vars: SUPABASE_URL, SUPABASE_SERVICE_KEY
+# Env vars: SUPABASE_URL, SUPABASE_API_KEY_N8N_ATLAS_MORNING_BRIEF
 github_trending:
   enabled: false
   max_items: 20
