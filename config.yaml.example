@@ -124,6 +124,15 @@ output_format: "kindle"
 email_recipients:
   - "your-email@example.com"
 
+# Obsidian vault integration (LLM Wiki)
+# Publishes briefing artifacts to an Obsidian vault via Local REST API plugin
+# Env vars: OBSIDIAN_API_KEY
+obsidian:
+  enabled: false
+  api_url: "http://localhost:27123"
+  briefing_folder: "Sources/Briefings"
+  trending_threshold: 3  # days before concept auto-promotion
+
 # File naming pattern
 file_naming: "Atlas-Briefing-{yyyy}.{mm}.{dd}"
 

@@ -136,6 +136,24 @@ def validate_config(config: Dict[str, Any]) -> Tuple[bool, List[str]]:
                                     "(expected: heavy, medium, light)"
                                 )
 
+    # --- Obsidian config ---
+    obsidian = config.get("obsidian")
+    if obsidian is not None:
+        if not isinstance(obsidian, dict):
+            errors.append("'obsidian' must be a dictionary")
+        elif obsidian.get("enabled", False):
+            if not obsidian.get("api_url"):
+                warnings.append(
+                    "obsidian.api_url not set, defaulting to http://localhost:27123"
+                )
+            threshold = obsidian.get("trending_threshold")
+            if threshold is not None and (
+                not isinstance(threshold, int) or threshold < 1
+            ):
+                errors.append(
+                    "obsidian.trending_threshold must be a positive integer"
+                )
+
     # --- Log results ---
     for w in warnings:
         logger.warning(f"Config warning: {w}")
@@ -180,6 +198,14 @@ def check_environment(config: Dict[str, Any], dry_run: bool = False) -> List[str
         if not os.environ.get("GMAIL_APP_PASSWORD"):
             warnings.append(
                 "GMAIL_APP_PASSWORD not set -- Kindle delivery will be skipped"
+            )
+
+    # Obsidian requires API key
+    obsidian = config.get("obsidian", {})
+    if obsidian.get("enabled", False):
+        if not os.environ.get("OBSIDIAN_API_KEY"):
+            warnings.append(
+                "OBSIDIAN_API_KEY not set -- Obsidian publish will be skipped"
             )
 
     for w in warnings:

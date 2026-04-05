@@ -45,10 +45,10 @@ def scanner():
 
 class TestParseArxivResponse:
     def test_parses_valid_entry(self, scanner):
-        from datetime import datetime, timedelta, timezone
-        start_date = datetime.now(timezone.utc) - timedelta(days=30)
+        from datetime import datetime, timezone
+        # Use a fixed date before the sample paper (2026-03-05) to avoid time-dependent failures
+        start_date = datetime(2026, 3, 1, tzinfo=timezone.utc)
         papers = scanner._parse_arxiv_response(SAMPLE_ARXIV_XML, start_date)
-        # Should include the 2026 paper, might include the 2020 one depending on start_date
         assert len(papers) >= 1
         paper = papers[0]
         assert paper["title"] == "Evaluating Multi-Agent Systems"

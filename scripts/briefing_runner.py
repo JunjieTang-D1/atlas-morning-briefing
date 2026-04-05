@@ -40,6 +40,7 @@ from scripts.newsletter_scanner import NewsletterScanner
 from scripts.github_trending_scanner import GitHubTrendingScanner
 from opentelemetry import trace
 from scripts.tracing import setup_tracing, get_tracer
+from scripts.obsidian_writer import ObsidianWriter
 
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
@@ -892,6 +893,62 @@ class BriefingRunner:
             self.errors.append(f"Distribution: {e}")
             return {}
 
+    def publish_to_obsidian(
+        self,
+        markdown_content: str,
+        date: datetime,
+        top_papers: List[Dict[str, Any]],
+        emerging_themes: List[str],
+        entity_mentions: List[Dict[str, Any]],
+        trending_topics: Dict[str, Any],
+        weekly_deep_dive: str,
+        briefing_name: str,
+        weekly_items: List[Dict[str, Any]],
+    ) -> Dict[str, Any]:
+        """Publish briefing artifacts to Obsidian vault."""
+        obsidian_config = self.config.get("obsidian", {})
+        if not obsidian_config.get("enabled", False):
+            return {}
+
+        api_url = obsidian_config.get("api_url", "http://localhost:27123")
+        api_key = os.environ.get("OBSIDIAN_API_KEY", "")
+        if not api_key:
+            logger.warning("OBSIDIAN_API_KEY not set, skipping Obsidian publish")
+            return {}
+
+        if self.dry_run:
+            logger.info("Dry run: Skipping Obsidian publish")
+            return {}
+
+        try:
+            writer = ObsidianWriter(api_url, api_key, obsidian_config)
+            weekly_briefing_names = list({
+                f"Atlas-Briefing-{item['date']}" for item in weekly_items
+            }) if weekly_items else []
+
+            results = writer.publish(
+                markdown_content=markdown_content,
+                date=date,
+                status=self.status,
+                emerging_themes=emerging_themes,
+                top_papers=top_papers,
+                entity_mentions=entity_mentions,
+                trending_topics=trending_topics,
+                weekly_deep_dive=weekly_deep_dive,
+                briefing_name=briefing_name,
+                weekly_briefing_names=weekly_briefing_names,
+            )
+            self.status["obsidian"] = results
+            logger.info(
+                f"Obsidian publish: briefing={'ok' if results.get('briefing') else 'fail'}"
+            )
+            return results
+
+        except Exception as e:
+            logger.error(f"Obsidian publish failed: {e}")
+            self.errors.append(f"Obsidian publish: {e}")
+            return {}
+
     def save_status(self, output_dir: str = ".") -> None:
         """
         Save run status to JSON file for monitoring.
@@ -1162,6 +1219,19 @@ class BriefingRunner:
 
             # --- Distribute to all channels ---
             self.distribute_briefing(markdown_content, pdf_path, filename)
+
+        # --- Publish to Obsidian vault ---
+        self.publish_to_obsidian(
+            markdown_content=markdown_content,
+            date=now,
+            top_papers=top_papers,
+            emerging_themes=emerging_themes,
+            entity_mentions=synthesis.get("entity_mentions", []),
+            trending_topics=previous_state.get("trending_topics", {}),
+            weekly_deep_dive=weekly_deep_dive,
+            briefing_name=filename,
+            weekly_items=weekly_items,
+        )
 
         # --- Mark newsletters as digested in Supabase ---
         ns_config = self.config.get("newsletter_source", {})
