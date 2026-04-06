@@ -203,7 +203,7 @@ class EmailDistributor:
 <div class="container">
 {html_body}
 <div class="footer">
-  Atlas Morning Briefing<br>
+  Personal Morning Briefing<br>
   <a href="https://github.com/your-org/atlas-morning-briefing">GitHub</a>
 </div>
 </div>
@@ -291,7 +291,7 @@ class EmailDistributor:
             return {}
 
         if not subject:
-            subject = "Atlas Morning Briefing"
+            subject = "Personal Morning Briefing"
         subject = subject.replace("\n", " ").replace("\r", " ")
 
         html_content = self._markdown_to_html(markdown_content)

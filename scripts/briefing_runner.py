@@ -1219,7 +1219,13 @@ class BriefingRunner:
 
                 # --- Generate NotebookLM podcast URL (fire-and-forget, ~10-20s) ---
                 if self.podcast_generator.enabled:
-                    source_urls = [p["url"] for p in top_papers if p.get("url")]
+                    # Mix paper, blog, and news URLs for richer source grounding
+                    # (podcast_generator slices to [:10] internally)
+                    source_urls = (
+                        [p["url"] for p in top_papers[:4] if p.get("url")]
+                        + [b["link"] for b in blogs[:4] if b.get("link")]
+                        + [n["url"] for n in news[:2] if n.get("url")]
+                    )
                     podcast_url = self.podcast_generator.generate(
                         markdown_content, now, source_urls
                     )

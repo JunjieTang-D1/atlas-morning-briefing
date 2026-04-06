@@ -161,7 +161,7 @@ class PodcastGenerator:
                 try:
                     # 1. Create daily notebook
                     nb = await client.notebooks.create(
-                        f"Atlas Daily Brief {date.strftime('%Y-%m-%d')}"
+                        f"Personal Daily Brief {date.strftime('%Y-%m-%d')}"
                     )
                     notebook_id = nb.id
                     logger.info(f"Created NotebookLM notebook: {notebook_id}")
@@ -174,7 +174,7 @@ class PodcastGenerator:
                     # 3. Add briefing markdown as primary text source
                     await client.sources.add_text(
                         notebook_id,
-                        title=f"Atlas Briefing {date.strftime('%Y-%m-%d')}",
+                        title=f"Personal Briefing {date.strftime('%Y-%m-%d')}",
                         content=briefing_markdown,
                         wait=True,
                     )
