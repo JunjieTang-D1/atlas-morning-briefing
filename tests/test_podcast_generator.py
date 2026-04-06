@@ -1,9 +1,8 @@
 # Copyright (c) 2026 Junjie Tang. MIT License. See LICENSE file for details.
 """Tests for podcast_generator module."""
 
-import asyncio
+import base64
 import os
-import tempfile
 from datetime import datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -45,6 +44,49 @@ def mock_storage_state(tmp_path):
 def generator_with_storage(config_enabled, mock_storage_state):
     cfg = {**config_enabled, "storage_state_path": mock_storage_state}
     return PodcastGenerator(cfg)
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+FAKE_SHARE_URL = "https://notebooklm.google.com/notebook/test-nb-123"
+
+
+def _make_mock_client():
+    """Build a fully mocked NotebookLMClient."""
+    mock_notebook = MagicMock()
+    mock_notebook.id = "nb-test-123"
+
+    mock_source = MagicMock()
+    mock_source.id = "src-001"
+
+    mock_share_status = MagicMock()
+    mock_share_status.share_url = FAKE_SHARE_URL
+
+    mock_notebooks = MagicMock()
+    mock_notebooks.create = AsyncMock(return_value=mock_notebook)
+    mock_notebooks.delete = AsyncMock(return_value=True)
+
+    mock_sources = MagicMock()
+    mock_sources.add_text = AsyncMock(return_value=mock_source)
+    mock_sources.add_url = AsyncMock(return_value=mock_source)
+
+    mock_sharing = MagicMock()
+    mock_sharing.set_public = AsyncMock(return_value=mock_share_status)
+
+    mock_artifacts = MagicMock()
+    mock_artifacts.generate_audio = AsyncMock(return_value=MagicMock(task_id="task-abc"))
+    mock_artifacts.wait_for_completion = AsyncMock()  # should NOT be called
+
+    client = MagicMock()
+    client.notebooks = mock_notebooks
+    client.sources = mock_sources
+    client.sharing = mock_sharing
+    client.artifacts = mock_artifacts
+    client.__aenter__ = AsyncMock(return_value=client)
+    client.__aexit__ = AsyncMock(return_value=False)
+    return client
 
 
 # ---------------------------------------------------------------------------
@@ -92,7 +134,10 @@ class TestStoragePathResolution:
         gen = PodcastGenerator({"enabled": True, "storage_state_path": str(p)})
         assert gen._resolve_storage_path() == str(p)
 
-    def test_explicit_path_missing_returns_none(self, tmp_path):
+    def test_explicit_path_missing_returns_none(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("HOME", str(tmp_path))
+        monkeypatch.delenv("NOTEBOOKLM_STORAGE_STATE_PATH", raising=False)
+        monkeypatch.delenv("NOTEBOOKLM_STORAGE_STATE_B64", raising=False)
         gen = PodcastGenerator({
             "enabled": True,
             "storage_state_path": str(tmp_path / "nonexistent.json"),
@@ -114,7 +159,6 @@ class TestStoragePathResolution:
         assert gen._resolve_storage_path() is None
 
     def test_decode_b64_to_temp(self, monkeypatch):
-        import base64
         content = b'{"cookies": []}'
         monkeypatch.setenv("NOTEBOOKLM_STORAGE_STATE_B64", base64.b64encode(content).decode())
         gen = PodcastGenerator({"enabled": True})
@@ -156,112 +200,53 @@ class TestGenerateDisabled:
 
 
 # ---------------------------------------------------------------------------
-# TestGenerateAsync (mocked NotebookLMClient)
+# TestGenerateHappyPath
 # ---------------------------------------------------------------------------
 
-def _make_mock_client():
-    """Build a fully mocked NotebookLMClient."""
-    mock_notebook = MagicMock()
-    mock_notebook.id = "nb-test-123"
-
-    mock_source = MagicMock()
-    mock_source.id = "src-001"
-
-    mock_status = MagicMock()
-    mock_status.task_id = "task-abc"
-
-    mock_notebooks = MagicMock()
-    mock_notebooks.create = AsyncMock(return_value=mock_notebook)
-    mock_notebooks.delete = AsyncMock(return_value=True)
-
-    mock_sources = MagicMock()
-    mock_sources.add_text = AsyncMock(return_value=mock_source)
-    mock_sources.add_url = AsyncMock(return_value=mock_source)
-
-    mock_artifacts = MagicMock()
-    mock_artifacts.generate_audio = AsyncMock(return_value=mock_status)
-    mock_artifacts.wait_for_completion = AsyncMock(return_value=mock_status)
-    mock_artifacts.download_audio = AsyncMock(return_value="/tmp/fake.mp3")
-
-    client = MagicMock()
-    client.notebooks = mock_notebooks
-    client.sources = mock_sources
-    client.artifacts = mock_artifacts
-    client.__aenter__ = AsyncMock(return_value=client)
-    client.__aexit__ = AsyncMock(return_value=False)
-    return client
-
-
-class TestGenerateAsyncHappyPath:
-    def test_returns_mp3_bytes(self, generator_with_storage, tmp_path):
-        fake_mp3 = b"ID3FAKEMP3DATA"
+class TestGenerateHappyPath:
+    def test_returns_share_url(self, generator_with_storage):
         mock_client = _make_mock_client()
-
-        # Patch download_audio to write to the expected temp file path
-        async def fake_download(notebook_id, path):
-            with open(path, "wb") as f:
-                f.write(fake_mp3)
-            return path
-
-        mock_client.artifacts.download_audio = fake_download
-
         with patch("scripts.podcast_generator.NotebookLMClient") as MockClient:
             MockClient.from_storage = AsyncMock(return_value=mock_client)
-            result = generator_with_storage.generate(
-                "# Briefing content", datetime(2026, 4, 6)
-            )
+            result = generator_with_storage.generate("# Briefing", datetime(2026, 4, 6))
+        assert result == FAKE_SHARE_URL
 
-        assert result == fake_mp3
-
-    def test_creates_and_deletes_notebook(self, generator_with_storage):
-        fake_mp3 = b"MP3DATA"
+    def test_sharing_set_public_called(self, generator_with_storage):
         mock_client = _make_mock_client()
-
-        async def fake_download(notebook_id, path):
-            with open(path, "wb") as f:
-                f.write(fake_mp3)
-            return path
-
-        mock_client.artifacts.download_audio = fake_download
-
         with patch("scripts.podcast_generator.NotebookLMClient") as MockClient:
             MockClient.from_storage = AsyncMock(return_value=mock_client)
             generator_with_storage.generate("content", datetime(2026, 4, 6))
+        mock_client.sharing.set_public.assert_awaited_once_with("nb-test-123", True)
 
-        mock_client.notebooks.create.assert_awaited_once()
-        mock_client.notebooks.delete.assert_awaited_once_with("nb-test-123")
+    def test_does_not_delete_notebook(self, generator_with_storage):
+        mock_client = _make_mock_client()
+        with patch("scripts.podcast_generator.NotebookLMClient") as MockClient:
+            MockClient.from_storage = AsyncMock(return_value=mock_client)
+            generator_with_storage.generate("content", datetime(2026, 4, 6))
+        mock_client.notebooks.delete.assert_not_awaited()
+
+    def test_generate_audio_called_not_waited(self, generator_with_storage):
+        mock_client = _make_mock_client()
+        with patch("scripts.podcast_generator.NotebookLMClient") as MockClient:
+            MockClient.from_storage = AsyncMock(return_value=mock_client)
+            generator_with_storage.generate("content", datetime(2026, 4, 6))
+        mock_client.artifacts.generate_audio.assert_awaited_once()
+        mock_client.artifacts.wait_for_completion.assert_not_awaited()
 
     def test_adds_text_source(self, generator_with_storage):
-        fake_mp3 = b"MP3"
         mock_client = _make_mock_client()
-
-        async def fake_download(notebook_id, path):
-            with open(path, "wb") as f:
-                f.write(fake_mp3)
-            return path
-
-        mock_client.artifacts.download_audio = fake_download
-
         with patch("scripts.podcast_generator.NotebookLMClient") as MockClient:
             MockClient.from_storage = AsyncMock(return_value=mock_client)
             generator_with_storage.generate("# My briefing", datetime(2026, 4, 6))
-
         mock_client.sources.add_text.assert_awaited_once()
         call_kwargs = mock_client.sources.add_text.call_args
-        assert "# My briefing" in call_kwargs.kwargs.get("content", "") or \
-               "# My briefing" in (call_kwargs.args[2] if len(call_kwargs.args) > 2 else "")
+        content_val = call_kwargs.kwargs.get("content", "") or (
+            call_kwargs.args[2] if len(call_kwargs.args) > 2 else ""
+        )
+        assert "# My briefing" in content_val
 
     def test_adds_paper_urls(self, generator_with_storage):
-        fake_mp3 = b"MP3"
         mock_client = _make_mock_client()
-
-        async def fake_download(notebook_id, path):
-            with open(path, "wb") as f:
-                f.write(fake_mp3)
-            return path
-
-        mock_client.artifacts.download_audio = fake_download
-
         with patch("scripts.podcast_generator.NotebookLMClient") as MockClient:
             MockClient.from_storage = AsyncMock(return_value=mock_client)
             generator_with_storage.generate(
@@ -269,7 +254,6 @@ class TestGenerateAsyncHappyPath:
                 datetime(2026, 4, 6),
                 source_urls=["https://arxiv.org/abs/1234.5678"],
             )
-
         mock_client.sources.add_url.assert_awaited()
 
     def test_skips_paper_urls_when_disabled(self, mock_storage_state):
@@ -279,84 +263,58 @@ class TestGenerateAsyncHappyPath:
             "storage_state_path": mock_storage_state,
         }
         gen = PodcastGenerator(config)
-        fake_mp3 = b"MP3"
         mock_client = _make_mock_client()
-
-        async def fake_download(notebook_id, path):
-            with open(path, "wb") as f:
-                f.write(fake_mp3)
-            return path
-
-        mock_client.artifacts.download_audio = fake_download
-
         with patch("scripts.podcast_generator.NotebookLMClient") as MockClient:
             MockClient.from_storage = AsyncMock(return_value=mock_client)
             gen.generate("content", datetime(2026, 4, 6), source_urls=["https://example.com"])
-
         mock_client.sources.add_url.assert_not_awaited()
 
 
-class TestGenerateAsyncFailures:
-    def test_timeout_returns_none(self, generator_with_storage):
-        mock_client = _make_mock_client()
-        mock_client.artifacts.wait_for_completion = AsyncMock(side_effect=TimeoutError("timed out"))
+# ---------------------------------------------------------------------------
+# TestGenerateFailures
+# ---------------------------------------------------------------------------
 
+class TestGenerateFailures:
+    def test_notebook_creation_failure_returns_none(self, generator_with_storage):
+        mock_client = _make_mock_client()
+        mock_client.notebooks.create = AsyncMock(side_effect=Exception("create failed"))
         with patch("scripts.podcast_generator.NotebookLMClient") as MockClient:
             MockClient.from_storage = AsyncMock(return_value=mock_client)
             result = generator_with_storage.generate("content", datetime(2026, 4, 6))
-
         assert result is None
 
-    def test_generation_error_returns_none(self, generator_with_storage):
+    def test_set_public_failure_returns_none_and_deletes_notebook(self, generator_with_storage):
         mock_client = _make_mock_client()
-        mock_client.artifacts.generate_audio = AsyncMock(
-            side_effect=Exception("API error")
-        )
-
+        mock_client.sharing.set_public = AsyncMock(side_effect=Exception("share failed"))
         with patch("scripts.podcast_generator.NotebookLMClient") as MockClient:
             MockClient.from_storage = AsyncMock(return_value=mock_client)
             result = generator_with_storage.generate("content", datetime(2026, 4, 6))
-
         assert result is None
-
-    def test_notebook_deleted_on_failure(self, generator_with_storage):
-        mock_client = _make_mock_client()
-        mock_client.artifacts.generate_audio = AsyncMock(
-            side_effect=Exception("API error")
-        )
-
-        with patch("scripts.podcast_generator.NotebookLMClient") as MockClient:
-            MockClient.from_storage = AsyncMock(return_value=mock_client)
-            generator_with_storage.generate("content", datetime(2026, 4, 6))
-
-        # Notebook should be cleaned up even when generation fails
         mock_client.notebooks.delete.assert_awaited_once_with("nb-test-123")
 
-    def test_client_init_error_returns_none(self, generator_with_storage):
+    def test_audio_start_failure_still_returns_url(self, generator_with_storage):
+        mock_client = _make_mock_client()
+        mock_client.artifacts.generate_audio = AsyncMock(side_effect=Exception("API error"))
         with patch("scripts.podcast_generator.NotebookLMClient") as MockClient:
-            MockClient.from_storage = AsyncMock(side_effect=Exception("auth failed"))
+            MockClient.from_storage = AsyncMock(return_value=mock_client)
             result = generator_with_storage.generate("content", datetime(2026, 4, 6))
-
-        assert result is None
+        # URL is still returned even when audio generation start fails
+        assert result == FAKE_SHARE_URL
+        # Notebook is NOT deleted
+        mock_client.notebooks.delete.assert_not_awaited()
 
     def test_url_source_failure_does_not_abort(self, generator_with_storage):
-        """A failing URL source should not abort audio generation."""
-        fake_mp3 = b"MP3DATA"
         mock_client = _make_mock_client()
         mock_client.sources.add_url = AsyncMock(side_effect=Exception("URL error"))
-
-        async def fake_download(notebook_id, path):
-            with open(path, "wb") as f:
-                f.write(fake_mp3)
-            return path
-
-        mock_client.artifacts.download_audio = fake_download
-
         with patch("scripts.podcast_generator.NotebookLMClient") as MockClient:
             MockClient.from_storage = AsyncMock(return_value=mock_client)
             result = generator_with_storage.generate(
                 "content", datetime(2026, 4, 6), source_urls=["https://bad-url.com"]
             )
+        assert result == FAKE_SHARE_URL
 
-        # Audio generation should still succeed despite URL source failure
-        assert result == fake_mp3
+    def test_client_init_error_returns_none(self, generator_with_storage):
+        with patch("scripts.podcast_generator.NotebookLMClient") as MockClient:
+            MockClient.from_storage = AsyncMock(side_effect=Exception("auth failed"))
+            result = generator_with_storage.generate("content", datetime(2026, 4, 6))
+        assert result is None

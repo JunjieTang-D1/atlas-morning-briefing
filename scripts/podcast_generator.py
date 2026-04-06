@@ -3,8 +3,10 @@
 """
 NotebookLM podcast generator.
 
-Generates a NotebookLM Audio Overview (podcast) from the daily briefing
-and returns MP3 bytes for email attachment delivery.
+Creates a shared NotebookLM notebook from the daily briefing and returns a
+public share URL for embedding in the briefing markdown. Audio generation is
+kicked off asynchronously — the link is valid immediately; audio is ready
+~10 minutes later on Google's side.
 
 Auth uses a Playwright storage_state.json file containing Google session cookies.
 - Local dev: set NOTEBOOKLM_STORAGE_STATE_PATH to the file path
@@ -35,7 +37,13 @@ except ImportError:
 
 
 class PodcastGenerator:
-    """Generates NotebookLM Audio Overview podcasts from daily briefings."""
+    """Generates a shared NotebookLM notebook from the daily briefing.
+
+    Returns a public share URL that is embedded in the briefing markdown.
+    Audio generation is fire-and-forget — the notebook link is valid immediately;
+    the audio overview becomes playable ~10 minutes after the briefing runs.
+    Notebooks are kept alive (not deleted) so the link remains accessible.
+    """
 
     def __init__(self, config: Dict[str, Any]):
         self.enabled = config.get("enabled", False)
@@ -58,10 +66,12 @@ class PodcastGenerator:
         """True if notebooklm-py is installed and auth is configured."""
         if not HAS_NOTEBOOKLM:
             return False
-        return bool(self._resolve_storage_path())
+        return bool(self._resolve_storage_path()) or bool(
+            os.environ.get("NOTEBOOKLM_STORAGE_STATE_B64")
+        )
 
     def _resolve_storage_path(self) -> Optional[str]:
-        """Return the storage_state.json path, decoding from B64 env var if needed."""
+        """Return the storage_state.json path, or None if only B64/missing."""
         # Explicit config path (local dev)
         if self._storage_state_path:
             p = Path(self._storage_state_path).expanduser()
@@ -77,10 +87,9 @@ class PodcastGenerator:
                 return str(p)
             logger.warning(f"NOTEBOOKLM_STORAGE_STATE_PATH not found: {p}")
 
-        # Base64-encoded JSON (k8s secret) — written to a temp file
-        b64 = os.environ.get("NOTEBOOKLM_STORAGE_STATE_B64")
-        if b64:
-            return None  # Decoded per-run in _resolve_storage_path_or_temp
+        # Base64-encoded JSON (k8s secret) — decoded per-run in generate()
+        if os.environ.get("NOTEBOOKLM_STORAGE_STATE_B64"):
+            return None
 
         # Default location created by `notebooklm login`
         default = Path("~/.notebooklm/storage_state.json").expanduser()
@@ -110,12 +119,12 @@ class PodcastGenerator:
         briefing_markdown: str,
         date: datetime,
         source_urls: Optional[List[str]] = None,
-    ) -> Optional[bytes]:
-        """Generate Audio Overview podcast. Returns MP3 bytes or None on failure.
+    ) -> Optional[str]:
+        """Create a shared NotebookLM notebook and return its public URL.
 
-        This is a synchronous wrapper around the async notebooklm-py client.
-        Audio generation typically takes 5–15 minutes; max_wait_seconds controls
-        the timeout (default 1200s = 20 min).
+        Returns the share URL (str) on success, or None if disabled/auth missing/error.
+        Audio generation is kicked off asynchronously — the link is valid immediately;
+        the audio overview is ready ~10 minutes later on Google's side.
         """
         if not self.enabled:
             return None
@@ -129,12 +138,11 @@ class PodcastGenerator:
         briefing_markdown: str,
         date: datetime,
         source_urls: List[str],
-    ) -> Optional[bytes]:
-        """Async implementation: create notebook, add sources, generate audio, download."""
-        tmp_audio_path: Optional[str] = None
+    ) -> Optional[str]:
+        """Async core: create notebook, share it, add sources, kick off audio."""
         tmp_storage_path: Optional[str] = None
 
-        # Resolve storage state file
+        # Resolve auth
         storage_path = self._resolve_storage_path()
         if not storage_path:
             tmp_storage_path = self._decode_b64_to_temp()
@@ -158,7 +166,12 @@ class PodcastGenerator:
                     notebook_id = nb.id
                     logger.info(f"Created NotebookLM notebook: {notebook_id}")
 
-                    # 2. Add briefing markdown as primary text source
+                    # 2. Make public — share_url is now fixed and embeddable
+                    share_status = await client.sharing.set_public(notebook_id, True)
+                    share_url = share_status.share_url
+                    logger.info(f"NotebookLM share URL: {share_url}")
+
+                    # 3. Add briefing markdown as primary text source
                     await client.sources.add_text(
                         notebook_id,
                         title=f"Atlas Briefing {date.strftime('%Y-%m-%d')}",
@@ -167,7 +180,7 @@ class PodcastGenerator:
                     )
                     logger.debug("Added briefing text source")
 
-                    # 3. Add top paper URLs for richer grounding (best-effort)
+                    # 4. Add top paper URLs for richer grounding (best-effort)
                     if self.include_paper_urls:
                         for url in source_urls[:10]:
                             try:
@@ -175,63 +188,37 @@ class PodcastGenerator:
                             except Exception as e:
                                 logger.debug(f"Skipping URL source {url[:60]}: {e}")
 
-                    # 4. Trigger audio generation
-                    audio_format = AudioFormat[self._audio_format_name]
-                    audio_length = AudioLength[self._audio_length_name]
-                    status = await client.artifacts.generate_audio(
-                        notebook_id,
-                        instructions=self.instructions,
-                        audio_format=audio_format,
-                        audio_length=audio_length,
-                    )
-                    logger.info(
-                        f"Audio generation started (task_id={status.task_id}); "
-                        f"waiting up to {self.max_wait_seconds:.0f}s"
-                    )
+                    # 5. Kick off audio generation — fire-and-forget
+                    #    Audio is ready ~10 min later; we return the link now.
+                    try:
+                        audio_format = AudioFormat[self._audio_format_name]
+                        audio_length = AudioLength[self._audio_length_name]
+                        await client.artifacts.generate_audio(
+                            notebook_id,
+                            instructions=self.instructions,
+                            audio_format=audio_format,
+                            audio_length=audio_length,
+                        )
+                        logger.info("Audio generation started (ready in ~10 min)")
+                    except Exception as e:
+                        logger.warning(f"Audio generation start failed (link still valid): {e}")
 
-                    # 5. Poll until complete (built-in exponential backoff)
-                    await client.artifacts.wait_for_completion(
-                        notebook_id,
-                        status.task_id,
-                        timeout=self.max_wait_seconds,
-                    )
-                    logger.info("Audio generation complete")
+                    return share_url
 
-                    # 6. Download to temp file, read bytes
-                    with tempfile.NamedTemporaryFile(
-                        suffix=".mp3", prefix="atlas_podcast_", delete=False
-                    ) as f:
-                        tmp_audio_path = f.name
-                    await client.artifacts.download_audio(notebook_id, tmp_audio_path)
-                    with open(tmp_audio_path, "rb") as f:
-                        audio_bytes = f.read()
-                    logger.info(
-                        f"Downloaded podcast audio: {len(audio_bytes) / 1024:.0f} KB"
-                    )
-                    return audio_bytes
-
-                except TimeoutError:
-                    logger.warning(
-                        f"NotebookLM audio generation timed out after {self.max_wait_seconds:.0f}s"
-                    )
-                    return None
                 except Exception as e:
-                    logger.warning(f"NotebookLM podcast generation failed: {e}")
-                    return None
-                finally:
-                    # Always clean up the notebook to avoid accumulation
+                    logger.warning(f"NotebookLM podcast setup failed: {e}")
+                    # Clean up notebook only if we never obtained a usable URL
                     if notebook_id:
                         try:
                             await client.notebooks.delete(notebook_id)
-                            logger.debug(f"Deleted notebook: {notebook_id}")
+                            logger.debug(f"Deleted notebook after failed setup: {notebook_id}")
                         except Exception:
                             pass
+                    return None
 
         except Exception as e:
             logger.warning(f"NotebookLM client init failed: {e}")
             return None
         finally:
-            if tmp_audio_path and os.path.exists(tmp_audio_path):
-                os.unlink(tmp_audio_path)
             if tmp_storage_path and os.path.exists(tmp_storage_path):
                 os.unlink(tmp_storage_path)

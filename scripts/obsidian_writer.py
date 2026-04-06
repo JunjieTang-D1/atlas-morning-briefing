@@ -146,6 +146,7 @@ class ObsidianWriter:
         emerging_themes: List[str],
         top_papers: List[Dict[str, Any]],
         entity_mentions: List[Dict[str, Any]],
+        podcast_url: Optional[str] = None,
     ) -> bool:
         """Write briefing to Sources/Briefings/YYYY/MM/Atlas-Briefing-YYYY-MM-DD.md"""
         date_str = date.strftime("%Y-%m-%d")
@@ -158,7 +159,7 @@ class ObsidianWriter:
         entity_names = [m["name"] for m in entity_mentions if m.get("name")]
         wiki_links = [f"[[{self._to_vault_name(n)}]]" for n in entity_names]
 
-        frontmatter = self._build_frontmatter({
+        fm_fields: Dict[str, Any] = {
             "type": "source/briefing",
             "source": "atlas-morning-briefing",
             "created": date_str,
@@ -174,7 +175,11 @@ class ObsidianWriter:
             "entity-mentions": entity_names,
             "wiki-links": wiki_links,
             "tags": ["source", "briefing", "morning-briefing"],
-        })
+        }
+        if podcast_url:
+            fm_fields["podcast-url"] = podcast_url
+
+        frontmatter = self._build_frontmatter(fm_fields)
 
         content = frontmatter + "\n" + markdown_content
         return self._put_note(path, content)
@@ -364,6 +369,7 @@ class ObsidianWriter:
         briefing_name: str,
         weekly_briefing_names: List[str],
         dry_run: bool = False,
+        podcast_url: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Publish all briefing artifacts to Obsidian. Each operation isolated."""
         if dry_run:
@@ -376,7 +382,7 @@ class ObsidianWriter:
         try:
             results["briefing"] = self.write_daily_briefing(
                 markdown_content, date, status, emerging_themes,
-                top_papers, entity_mentions,
+                top_papers, entity_mentions, podcast_url=podcast_url,
             )
         except Exception as e:
             logger.error(f"Obsidian briefing write failed: {e}")

@@ -909,6 +909,7 @@ class BriefingRunner:
         weekly_deep_dive: str,
         briefing_name: str,
         weekly_items: List[Dict[str, Any]],
+        podcast_url: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Publish briefing artifacts to Obsidian vault."""
         obsidian_config = self.config.get("obsidian", {})
@@ -942,6 +943,7 @@ class BriefingRunner:
                 weekly_deep_dive=weekly_deep_dive,
                 briefing_name=briefing_name,
                 weekly_briefing_names=weekly_briefing_names,
+                podcast_url=podcast_url,
             )
             self.status["obsidian"] = results
             logger.info(
@@ -954,50 +956,15 @@ class BriefingRunner:
             self.errors.append(f"Obsidian publish: {e}")
             return {}
 
-    def generate_podcast(
-        self,
-        markdown_content: str,
-        date: datetime,
-        top_papers: List[Dict[str, Any]],
-        filename: str,
-    ) -> None:
-        """Generate NotebookLM Audio Overview and send via email."""
-        if not self.podcast_generator.enabled:
-            return
-
-        source_urls = [p["url"] for p in top_papers if p.get("url")]
-        audio_bytes = self.podcast_generator.generate(markdown_content, date, source_urls)
-
-        if not audio_bytes:
-            logger.info("No podcast audio generated (failed or timed out)")
-            return
-
-        recipients = self.config.get("email_recipients", [])
-        if not recipients:
-            logger.warning("Podcast audio generated but no email_recipients configured")
-            return
-
-        if self.dry_run:
-            logger.info(f"Dry run: skipping podcast email ({len(audio_bytes) // 1024} KB)")
-            return
-
-        sender_email = os.environ.get("GMAIL_USER")
-        sender_password = os.environ.get("GMAIL_APP_PASSWORD")
-        if not sender_email or not sender_password:
-            logger.warning("Gmail credentials not set, skipping podcast email")
-            return
-
-        mp3_filename = filename.replace(".md", "") + ".mp3"
-        distributor = EmailDistributor(sender_email=sender_email, sender_password=sender_password)
-        results = distributor.send_podcast_email(
-            recipients=recipients,
-            audio_bytes=audio_bytes,
-            filename=mp3_filename,
-            date=date,
+    @staticmethod
+    def _inject_podcast_section(markdown_content: str, podcast_url: str) -> str:
+        """Append an Audio Overview section with the NotebookLM share link."""
+        section = (
+            "\n\n## Audio Overview\n\n"
+            f"[Listen on NotebookLM]({podcast_url}) "
+            "*(audio generating — ready in ~10 min)*\n"
         )
-        sent = sum(1 for v in results.values() if v)
-        logger.info(f"Podcast email: {sent}/{len(recipients)} sent")
-        self.status["podcast_sent"] = sent > 0
+        return markdown_content.rstrip() + section
 
     def save_status(self, output_dir: str = ".") -> None:
         """
@@ -1237,6 +1204,7 @@ class BriefingRunner:
                 root_span.set_status(trace.StatusCode.ERROR, "No data collected")
                 return 2
 
+            podcast_url: Optional[str] = None
             with self._tracer.start_as_current_span("atlas.render"):
                 # --- Generate markdown briefing ---
                 filename = self._format_filename(now)
@@ -1248,6 +1216,19 @@ class BriefingRunner:
                     newsletters=newsletters,
                     github_trending=github_trending,
                 )
+
+                # --- Generate NotebookLM podcast URL (fire-and-forget, ~10-20s) ---
+                if self.podcast_generator.enabled:
+                    source_urls = [p["url"] for p in top_papers if p.get("url")]
+                    podcast_url = self.podcast_generator.generate(
+                        markdown_content, now, source_urls
+                    )
+                    if podcast_url:
+                        markdown_content = self._inject_podcast_section(
+                            markdown_content, podcast_url
+                        )
+                        self.status["podcast_url"] = podcast_url
+                        logger.info(f"Podcast URL injected into briefing: {podcast_url}")
 
                 # --- Save markdown ---
                 md_path = f"{filename}.md"
@@ -1285,10 +1266,8 @@ class BriefingRunner:
             weekly_deep_dive=weekly_deep_dive,
             briefing_name=filename,
             weekly_items=weekly_items,
+            podcast_url=podcast_url,
         )
-
-        # --- Generate NotebookLM podcast (runs after main email, non-blocking on failure) ---
-        self.generate_podcast(markdown_content, now, top_papers, filename)
 
         # --- Mark newsletters as digested in Supabase ---
         ns_config = self.config.get("newsletter_source", {})
