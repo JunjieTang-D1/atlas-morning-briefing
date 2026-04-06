@@ -151,7 +151,7 @@ podcast:
   # storage_state_path: "~/.notebooklm/storage_state.json"  # override for local dev
 
 # File naming pattern
-file_naming: "Atlas-Briefing-{yyyy}.{mm}.{dd}"
+file_naming: "Personal-Briefing-{yyyy}.{mm}.{dd}"
 
 # Paper recommendations
 num_paper_picks: 3

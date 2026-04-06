@@ -178,7 +178,7 @@ class TestWriteDailyBriefing:
         )
         assert result is True
         call_url = mock_put.call_args[0][0]
-        assert "Sources/Briefings/2026/04/Atlas-Briefing-2026-04-05.md" in call_url
+        assert "Sources/Briefings/2026/04/Personal-Briefing-2026-04-05.md" in call_url
 
     @patch("scripts.obsidian_writer.requests.put")
     def test_frontmatter_contains_metadata(self, mock_put, writer, sample_date, sample_status):
@@ -224,19 +224,19 @@ class TestUpdateEntityTimelines:
         mock_put.return_value = MagicMock(status_code=200, raise_for_status=lambda: None)
 
         mentions = [{"name": "Anthropic", "count": 5, "example_titles": ["New model release"]}]
-        results = writer.update_entity_timelines(mentions, sample_date, "Atlas-Briefing-2026-04-05")
+        results = writer.update_entity_timelines(mentions, sample_date, "Personal-Briefing-2026-04-05")
 
         assert results["Anthropic"] is True
         content = mock_put.call_args.kwargs.get("data", b"").decode("utf-8")
         assert "### 2026-04-05" in content
-        assert "[[Atlas-Briefing-2026-04-05]]" in content
+        assert "[[Personal-Briefing-2026-04-05]]" in content
         assert "Mentioned 5 times" in content
 
     @patch("scripts.obsidian_writer.requests.get")
     def test_skips_nonexistent_entity(self, mock_get, writer, sample_date):
         mock_get.return_value = MagicMock(status_code=404)
         mentions = [{"name": "Unknown", "count": 1, "example_titles": []}]
-        results = writer.update_entity_timelines(mentions, sample_date, "Atlas-Briefing-2026-04-05")
+        results = writer.update_entity_timelines(mentions, sample_date, "Personal-Briefing-2026-04-05")
         assert results == {}  # skipped entirely, not in results
 
     @patch("scripts.obsidian_writer.requests.get")
@@ -245,12 +245,12 @@ class TestUpdateEntityTimelines:
         mock_get.return_value = MagicMock(status_code=200, text=existing, raise_for_status=lambda: None)
 
         mentions = [{"name": "Test", "count": 1, "example_titles": []}]
-        results = writer.update_entity_timelines(mentions, sample_date, "Atlas-Briefing-2026-04-05")
+        results = writer.update_entity_timelines(mentions, sample_date, "Personal-Briefing-2026-04-05")
         assert results["Test"] is True  # reported success, no PUT needed
 
     @patch("scripts.obsidian_writer.requests.get")
     def test_empty_mentions_returns_empty(self, mock_get, writer, sample_date):
-        results = writer.update_entity_timelines([], sample_date, "Atlas-Briefing-2026-04-05")
+        results = writer.update_entity_timelines([], sample_date, "Personal-Briefing-2026-04-05")
         assert results == {}
         mock_get.assert_not_called()
 
@@ -266,7 +266,7 @@ class TestPromoteConcepts:
             "agent-memory": {"first_seen": "2026-04-01", "count": 3, "last_seen": "2026-04-05"},
         }
         themes = ["Agent memory architectures are gaining traction"]
-        results = writer.promote_concepts(trending, themes, sample_date, "Atlas-Briefing-2026-04-05")
+        results = writer.promote_concepts(trending, themes, sample_date, "Personal-Briefing-2026-04-05")
 
         assert results["agent-memory"] is True
         content = mock_put.call_args.kwargs.get("data", b"").decode("utf-8")
@@ -279,26 +279,26 @@ class TestPromoteConcepts:
         trending = {
             "short-lived": {"first_seen": "2026-04-04", "count": 2, "last_seen": "2026-04-05"},
         }
-        results = writer.promote_concepts(trending, [], sample_date, "Atlas-Briefing-2026-04-05")
+        results = writer.promote_concepts(trending, [], sample_date, "Personal-Briefing-2026-04-05")
         assert results == {}
         mock_get.assert_not_called()
 
     @patch("scripts.obsidian_writer.requests.put")
     @patch("scripts.obsidian_writer.requests.get")
     def test_appends_to_existing_concept(self, mock_get, mock_put, writer, sample_date):
-        existing = "---\ntype: wiki/concept\ncreated: '2026-04-01'\nupdated: '2026-04-03'\ndetection-count: 3\nsources:\n- '[[Atlas-Briefing-2026-04-03]]'\ntags:\n- wiki\n- concept\n- auto-promoted\n---\n\n# Agent Memory\n\nSome content.\n"
+        existing = "---\ntype: wiki/concept\ncreated: '2026-04-01'\nupdated: '2026-04-03'\ndetection-count: 3\nsources:\n- '[[Personal-Briefing-2026-04-03]]'\ntags:\n- wiki\n- concept\n- auto-promoted\n---\n\n# Agent Memory\n\nSome content.\n"
         mock_get.return_value = MagicMock(status_code=200, text=existing, raise_for_status=lambda: None)
         mock_put.return_value = MagicMock(status_code=200, raise_for_status=lambda: None)
 
         trending = {
             "agent-memory": {"first_seen": "2026-04-01", "count": 4, "last_seen": "2026-04-05"},
         }
-        results = writer.promote_concepts(trending, [], sample_date, "Atlas-Briefing-2026-04-05")
+        results = writer.promote_concepts(trending, [], sample_date, "Personal-Briefing-2026-04-05")
 
         assert results["agent-memory"] is True
         content = mock_put.call_args.kwargs.get("data", b"").decode("utf-8")
         assert "### 2026-04-05" in content
-        assert "[[Atlas-Briefing-2026-04-05]]" in content
+        assert "[[Personal-Briefing-2026-04-05]]" in content
 
 
 class TestWriteWeeklySynthesis:
@@ -310,7 +310,7 @@ class TestWriteWeeklySynthesis:
         result = writer.write_weekly_synthesis(
             "# Weekly Deep Dive\n\nContent here.",
             date,
-            ["Atlas-Briefing-2026-03-30", "Atlas-Briefing-2026-04-04"],
+            ["Personal-Briefing-2026-03-30", "Personal-Briefing-2026-04-04"],
         )
         assert result is True
         call_url = mock_put.call_args[0][0]
@@ -318,7 +318,7 @@ class TestWriteWeeklySynthesis:
         content = mock_put.call_args.kwargs.get("data", b"").decode("utf-8")
         assert "type: wiki/synthesis" in content
         assert "weekly-digest" in content
-        assert "[[Atlas-Briefing-2026-03-30]]" in content
+        assert "[[Personal-Briefing-2026-03-30]]" in content
 
     def test_empty_content_returns_false(self, writer):
         result = writer.write_weekly_synthesis("", datetime(2026, 4, 4), [])
@@ -341,7 +341,7 @@ class TestPublish:
             entity_mentions=[],
             trending_topics={},
             weekly_deep_dive="",
-            briefing_name="Atlas-Briefing-2026-04-05",
+            briefing_name="Personal-Briefing-2026-04-05",
             weekly_briefing_names=[],
         )
         assert results["briefing"] is True
@@ -375,7 +375,7 @@ class TestPublish:
             entity_mentions=[{"name": "Anthropic", "count": 3, "example_titles": []}],
             trending_topics={},
             weekly_deep_dive="",
-            briefing_name="Atlas-Briefing-2026-04-05",
+            briefing_name="Personal-Briefing-2026-04-05",
             weekly_briefing_names=[],
         )
         # Briefing failed but entities still attempted
@@ -397,8 +397,8 @@ class TestPublish:
             entity_mentions=[],
             trending_topics={},
             weekly_deep_dive="# Weekly Deep Dive\n\nContent.",
-            briefing_name="Atlas-Briefing-2026-04-05",
-            weekly_briefing_names=["Atlas-Briefing-2026-04-01"],
+            briefing_name="Personal-Briefing-2026-04-05",
+            weekly_briefing_names=["Personal-Briefing-2026-04-01"],
         )
         assert results["weekly_synthesis"] is True
 
@@ -417,7 +417,7 @@ class TestPublish:
             entity_mentions=[],
             trending_topics={"agent-safety": {"first_seen": "2026-04-01", "count": 3, "last_seen": "2026-04-05"}},
             weekly_deep_dive="",
-            briefing_name="Atlas-Briefing-2026-04-05",
+            briefing_name="Personal-Briefing-2026-04-05",
             weekly_briefing_names=[],
         )
         assert "agent-safety" in results["concepts"]
@@ -433,7 +433,7 @@ class TestPublish:
             entity_mentions=[],
             trending_topics={},
             weekly_deep_dive="",
-            briefing_name="Atlas-Briefing-2026-04-05",
+            briefing_name="Personal-Briefing-2026-04-05",
             weekly_briefing_names=[],
             dry_run=True,
         )

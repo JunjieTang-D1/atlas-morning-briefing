@@ -517,7 +517,7 @@ class BriefingRunner:
 
     def _format_filename(self, now: datetime) -> str:
         """Format the output filename from config pattern, ignoring unknown keys."""
-        file_naming = self.config.get("file_naming", "Atlas-Briefing-{yyyy}.{mm}.{dd}")
+        file_naming = self.config.get("file_naming", "Personal-Briefing-{yyyy}.{mm}.{dd}")
         known_vars = {
             "yyyy": now.strftime("%Y"),
             "mm": now.strftime("%m"),
@@ -929,7 +929,7 @@ class BriefingRunner:
         try:
             writer = ObsidianWriter(api_url, api_key, obsidian_config)
             weekly_briefing_names = list({
-                f"Atlas-Briefing-{item['date']}" for item in weekly_items
+                f"Personal-Briefing-{item['date']}" for item in weekly_items
             }) if weekly_items else []
 
             results = writer.publish(
@@ -1219,12 +1219,20 @@ class BriefingRunner:
 
                 # --- Generate NotebookLM podcast URL (fire-and-forget, ~10-20s) ---
                 if self.podcast_generator.enabled:
-                    # Mix paper, blog, and news URLs for richer source grounding
-                    # (podcast_generator slices to [:10] internally)
+                    # Only include items that scored well in the intelligence layer
+                    # (same score_combined >= 3 gate used by the rendered sections)
+                    _relevant_blogs = sorted(
+                        [b for b in blogs if b.get("link") and b.get("score_combined", 0) >= 3],
+                        key=lambda x: x.get("score_combined", 0), reverse=True,
+                    )
+                    _relevant_news = sorted(
+                        [n for n in news if n.get("url") and n.get("score_combined", 0) >= 3],
+                        key=lambda x: x.get("score_combined", 0), reverse=True,
+                    )
                     source_urls = (
                         [p["url"] for p in top_papers[:4] if p.get("url")]
-                        + [b["link"] for b in blogs[:4] if b.get("link")]
-                        + [n["url"] for n in news[:2] if n.get("url")]
+                        + [b["link"] for b in _relevant_blogs[:4]]
+                        + [n["url"] for n in _relevant_news[:2]]
                     )
                     podcast_url = self.podcast_generator.generate(
                         markdown_content, now, source_urls

@@ -151,7 +151,7 @@ See `kindle_setup.md` for detailed Kindle configuration.
 Pattern for output filenames.
 
 ```yaml
-file_naming: "Atlas-Briefing-{type}-{yyyy}.{mm}.{dd}"
+file_naming: "Personal-Briefing-{type}-{yyyy}.{mm}.{dd}"
 ```
 
 **Variables**:
@@ -161,7 +161,7 @@ file_naming: "Atlas-Briefing-{type}-{yyyy}.{mm}.{dd}"
 - `{dd}`: Day (2 digits, zero-padded)
 
 **Examples**:
-- `Atlas-Briefing-{type}-{yyyy}.{mm}.{dd}` → `Atlas-Briefing-Daily-2026.03.06`
+- `Personal-Briefing-{type}-{yyyy}.{mm}.{dd}` → `Personal-Briefing-Daily-2026.03.06`
 - `Briefing-{yyyy}-{mm}-{dd}` → `Briefing-2026-03-06`
 - `Daily-Digest-{mm}{dd}` → `Daily-Digest-0306`
 
@@ -269,7 +269,7 @@ kindle_email: "username@kindle.com"
 sender_email: "agent@gmail.com"
 output_format: "kindle"
 
-file_naming: "Atlas-Briefing-{type}-{yyyy}.{mm}.{dd}"
+file_naming: "Personal-Briefing-{type}-{yyyy}.{mm}.{dd}"
 
 num_paper_picks: 3
 arxiv_days_back: 7

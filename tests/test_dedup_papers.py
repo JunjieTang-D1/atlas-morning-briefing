@@ -17,7 +17,7 @@ def runner():
         "max_papers": 5,
         "arxiv_days_back": 7,
         "output_format": "kindle",
-        "file_naming": "Atlas-Briefing-{yyyy}.{mm}.{dd}",
+        "file_naming": "Personal-Briefing-{yyyy}.{mm}.{dd}",
         "pdf": {"font_size": 10, "line_spacing": 1.5},
         "llm": {"enabled": False},
     }

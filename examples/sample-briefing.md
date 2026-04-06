@@ -1,4 +1,4 @@
-# Atlas-Briefing-Daily-2026.03.06
+# Personal-Briefing-Daily-2026.03.06
 
 Generated: 2026-03-06 06:50
 

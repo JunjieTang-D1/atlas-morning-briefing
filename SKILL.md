@@ -284,7 +284,7 @@ bedrock:
 Configure in `config.yaml`:
 
 ```yaml
-file_naming: "Atlas-Briefing-{yyyy}.{mm}.{dd}"
+file_naming: "Personal-Briefing-{yyyy}.{mm}.{dd}"
 ```
 
 Available variables:
@@ -293,7 +293,7 @@ Available variables:
 - `{dd}`: Day (2 digits)
 - `{type}`: Briefing type (defaults to "Daily")
 
-Example output: `Atlas-Briefing-2026.03.06.pdf`
+Example output: `Personal-Briefing-2026.03.06.pdf`
 
 ## Paper Scoring Criteria
 

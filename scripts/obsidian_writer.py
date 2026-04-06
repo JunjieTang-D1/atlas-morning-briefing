@@ -148,11 +148,11 @@ class ObsidianWriter:
         entity_mentions: List[Dict[str, Any]],
         podcast_url: Optional[str] = None,
     ) -> bool:
-        """Write briefing to Sources/Briefings/YYYY/MM/Atlas-Briefing-YYYY-MM-DD.md"""
+        """Write briefing to Sources/Briefings/YYYY/MM/Personal-Briefing-YYYY-MM-DD.md"""
         date_str = date.strftime("%Y-%m-%d")
         year = date.strftime("%Y")
         month = date.strftime("%m")
-        filename = f"Atlas-Briefing-{date_str}"
+        filename = f"Personal-Briefing-{date_str}"
         path = f"{self.briefing_folder}/{year}/{month}/{filename}.md"
 
         # Build wikilinks to mentioned entities
