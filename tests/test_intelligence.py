@@ -181,6 +181,68 @@ class TestDetectEntityMentionsWithAllSources:
         assert len(result) == 1
 
 
+class TestRankSourceLinks:
+    def test_returns_scored_items(self, mock_intelligence):
+        mock_intelligence.bedrock.invoke.return_value = (
+            "[1] SCORE:4/5 Highly relevant AI agent repo.\n"
+            "[2] SCORE:2/5 Tangentially related."
+        )
+        items = [
+            {"url": "https://github.com/org/agent-tool", "title": "agent-tool",
+             "source": "GitHub Trending", "source_type": "github"},
+            {"url": "https://example.com/article", "title": "Some article",
+             "source": "Newsletter", "source_type": "newsletter"},
+        ]
+        result = mock_intelligence.rank_source_links(items, ["Agentic AI"])
+        assert len(result) >= 1
+        assert result[0]["score_combined"] == 4
+
+    def test_empty_items_returns_empty(self, mock_intelligence):
+        assert mock_intelligence.rank_source_links([], ["Agentic AI"]) == []
+
+    def test_llm_failure_returns_empty(self, mock_intelligence):
+        mock_intelligence.bedrock.invoke.return_value = None
+        items = [{"url": "https://example.com", "title": "Test", "source": "Test"}]
+        assert mock_intelligence.rank_source_links(items, ["AI"]) == []
+
+    def test_mixed_types_scored_together(self, mock_intelligence):
+        mock_intelligence.bedrock.invoke.return_value = (
+            "[1] SCORE:5/5 Core AI framework.\n"
+            "[2] SCORE:4/5 Good newsletter article.\n"
+            "[3] SCORE:3/5 Tangential."
+        )
+        items = [
+            {"url": "https://github.com/org/repo", "title": "AI Framework",
+             "source": "GitHub Trending", "source_type": "github"},
+            {"url": "https://blog.com/article", "title": "Newsletter Pick",
+             "source": "The Batch", "source_type": "newsletter"},
+            {"url": "https://other.com/thing", "title": "Other Link",
+             "source": "Import AI", "source_type": "newsletter"},
+        ]
+        result = mock_intelligence.rank_source_links(items, ["AI"])
+        assert len(result) == 3
+        assert result[0]["score_combined"] == 5
+        assert result[1]["score_combined"] == 4
+
+    def test_handles_dict_topics(self, mock_intelligence):
+        mock_intelligence.bedrock.invoke.return_value = "[1] SCORE:3/5 Relevant."
+        items = [{"url": "https://ex.com", "title": "T", "source": "S"}]
+        topics = [{"topic": "Agentic AI", "weight": 1.0}]
+        result = mock_intelligence.rank_source_links(items, topics)
+        prompt = mock_intelligence.bedrock.invoke.call_args[0][0]
+        assert "Agentic AI" in prompt
+
+    def test_not_available_returns_items_unchanged(self, mock_intelligence):
+        mock_intelligence.bedrock.available = False
+        items = [
+            {"url": "https://ex.com", "title": "T", "source": "S"},
+            {"url": "https://ex2.com", "title": "T2", "source": "S2"},
+        ]
+        result = mock_intelligence.rank_source_links(items, ["AI"])
+        # Returns first 10 items unscored when LLM not available
+        assert len(result) == 2
+
+
 class TestCrossSourceSignalsWithAllSources:
     def test_detects_signals_from_newsletters(self, mock_intelligence):
         papers = [{"title": "Agent memory architectures for production"}]

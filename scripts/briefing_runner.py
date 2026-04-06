@@ -54,7 +54,7 @@ class BriefingRunner:
     """Main orchestrator for morning briefing generation."""
 
     # Default section order
-    DEFAULT_SECTION_ORDER = ["stocks", "news", "github_trending", "newsletters", "top_papers", "blogs"]
+    DEFAULT_SECTION_ORDER = ["stocks", "news", "community_picks", "newsletters", "top_papers", "blogs"]
 
     def __init__(self, config: Dict[str, Any], dry_run: bool = False):
         """
@@ -413,7 +413,7 @@ class BriefingRunner:
         synthesis: Optional[Dict[str, str]] = None,
         market_trend: str = "",
         newsletters: Optional[List[Dict[str, Any]]] = None,
-        github_trending: Optional[List[Dict[str, Any]]] = None,
+        community_picks: Optional[List[Dict[str, Any]]] = None,
         weekly_deep_dive: str = "",
     ) -> str:
         """
@@ -427,6 +427,7 @@ class BriefingRunner:
             top_papers: Top-scored papers.
             synthesis: Optional intelligence synthesis output.
             market_trend: Pre-generated market trend summary.
+            community_picks: Scored newsletter links + GitHub trending repos.
             weekly_deep_dive: Optional weekly deep dive section (Saturday only).
 
         Returns:
@@ -475,7 +476,7 @@ class BriefingRunner:
             "stocks": stocks,
             "news": news,
             "newsletters": newsletters or [],
-            "github_trending": github_trending or [],
+            "community_picks": community_picks or [],
             "blogs": blogs,
             "top_papers": top_papers,
             "papers": papers,
@@ -490,8 +491,8 @@ class BriefingRunner:
                 md.append(self._render_stocks(data, market_trend=market_trend))
             elif section == "news":
                 md.append(self._render_news(data))
-            elif section == "github_trending":
-                md.append(self._render_github_trending(data))
+            elif section == "community_picks":
+                md.append(self._render_community_picks(data))
             elif section == "newsletters":
                 md.append(self._render_newsletters(data))
             elif section == "blogs":
@@ -617,9 +618,10 @@ class BriefingRunner:
         return s
 
     def _render_news(self, news: List[Dict[str, Any]]) -> str:
-        """Render news section (top 5, with summaries)."""
+        """Render news section with summaries."""
+        max_news = self._get_limit("max_news_render", 5)
         md = ["## AI & Tech News\n\n"]
-        for article in news[:5]:
+        for article in news[:max_news]:
             article_title = article.get("title", "")
             url = article.get("url", "")
             summary = self._clean_summary(
@@ -636,9 +638,10 @@ class BriefingRunner:
         return "".join(md)
 
     def _render_blogs(self, blogs: List[Dict[str, Any]]) -> str:
-        """Render blog updates section (top 5, with summaries, sorted by score)."""
+        """Render blog updates section with summaries, sorted by score."""
+        max_blogs = self._get_limit("max_blogs_render", 5)
         md = ["## Blog Updates\n\n"]
-        sorted_blogs = sorted(blogs[:5], key=lambda x: x.get("score_combined", 0), reverse=True)
+        sorted_blogs = sorted(blogs[:max_blogs], key=lambda x: x.get("score_combined", 0), reverse=True)
         # Only filter by score when scores are present (Bedrock enabled)
         if any(b.get("score_combined") for b in sorted_blogs):
             sorted_blogs = [b for b in sorted_blogs if b.get("score_combined", 0) >= 3]
@@ -685,10 +688,61 @@ class BriefingRunner:
             md.append("\n")
         return "".join(md)
 
+    def _render_community_picks(self, items: List[Dict[str, Any]]) -> str:
+        """Render scored community & newsletter picks section."""
+        max_items = self._get_limit("max_community_picks", 8)
+        sorted_items = sorted(
+            items, key=lambda x: x.get("score_combined", 0), reverse=True
+        )
+        # Score gate: only filter when scores are present (intelligence enabled)
+        if any(i.get("score_combined") for i in sorted_items):
+            sorted_items = [
+                i for i in sorted_items if i.get("score_combined", 0) >= 3
+            ]
+        sorted_items = sorted_items[:max_items]
+
+        if not sorted_items:
+            return ""
+
+        md = ["## Community & Newsletter Picks\n\n"]
+        for item in sorted_items:
+            title = item.get("title") or item.get("name") or "Link"
+            url = item.get("url") or item.get("link") or ""
+            source = item.get("source", "")
+            score = item.get("score_combined")
+            summary = self._clean_summary(
+                item.get("brief_summary") or item.get("summary") or "",
+                title, source,
+            )
+
+            source_type = item.get("source_type", "")
+            if source_type == "github":
+                stars = item.get("stars", "")
+                lang = item.get("language", "")
+                parts = ["GitHub"]
+                if stars:
+                    parts.append(f"{stars} stars")
+                if lang:
+                    parts.append(lang)
+                tag = f" ({', '.join(parts)})"
+            else:
+                tag = f" *(via {source})*" if source else ""
+
+            score_tag = f" {self._render_stars(score)}" if score else ""
+            if url:
+                md.append(f"**[{title}]({url})**{tag}{score_tag}\n")
+            else:
+                md.append(f"**{title}**{tag}{score_tag}\n")
+            if summary:
+                md.append(f"{summary}\n")
+            md.append("\n")
+        return "".join(md)
+
     def _render_newsletters(self, newsletters: List[Dict[str, Any]]) -> str:
         """Render newsletter highlights section."""
+        max_newsletters = self._get_limit("max_newsletters_render", 10)
         md = ["## Newsletter Highlights\n\n"]
-        for item in newsletters:
+        for item in newsletters[:max_newsletters]:
             title = item.get("title", "Untitled")
             source = item.get("source", "")
             summary = item.get("summary", "")
@@ -755,9 +809,10 @@ class BriefingRunner:
         return papers
 
     def _render_top_papers(self, top_papers: List[Dict[str, Any]]) -> str:
-        """Render top papers section (top 3, with summaries, scores, and repro assessment)."""
+        """Render top papers section with summaries, scores, and repro assessment."""
+        max_top = self._get_limit("max_top_papers_render", 3)
         md = ["## Top Papers\n\n"]
-        sorted_papers = sorted(top_papers[:3], key=lambda x: x.get("score_combined", 0), reverse=True)
+        sorted_papers = sorted(top_papers[:max_top], key=lambda x: x.get("score_combined", 0), reverse=True)
         # Only filter by score when scores are present (Bedrock enabled)
         if any(p.get("score_combined") for p in sorted_papers):
             sorted_papers = [p for p in sorted_papers if p.get("score_combined", 0) >= 3]
@@ -797,9 +852,10 @@ class BriefingRunner:
         return "".join(md)
 
     def _render_papers(self, papers: List[Dict[str, Any]]) -> str:
-        """Render recent papers section (top 5, compact)."""
+        """Render recent papers section (compact)."""
+        max_papers = self._get_limit("max_papers_render", 5)
         md = ["## Recent Papers\n\n"]
-        for paper in papers[:5]:
+        for paper in papers[:max_papers]:
             paper_title = paper.get("title", "")
             authors = paper.get("authors", [])
             arxiv_url = paper.get("arxiv_url", "")
@@ -966,6 +1022,40 @@ class BriefingRunner:
         )
         return markdown_content.rstrip() + section
 
+    _URL_NOISE = re.compile(
+        r'(unsubscribe|track|pixel|click\.|\?utm_|mailto:|/login|/signin'
+        r'|twitter\.com|x\.com|t\.co|linkedin\.com|facebook\.com|instagram\.com)',
+        re.IGNORECASE,
+    )
+
+    @staticmethod
+    def _extract_urls_from_text(text: str) -> List[str]:
+        """Extract article URLs from newsletter text, filtering noise."""
+        if not text:
+            return []
+        raw = re.findall(r'https?://[^\s<>"\'\)\]\}]+', text)
+        seen: set = set()
+        out: List[str] = []
+        for url in raw:
+            url = url.rstrip('.,;:')
+            if url in seen or len(url) < 20:
+                continue
+            seen.add(url)
+            if BriefingRunner._URL_NOISE.search(url):
+                continue
+            out.append(url)
+        return out[:10]
+
+    def _get_limit(self, key: str, default: int) -> int:
+        """Get a render limit from env var BRIEFING_{KEY} or config, with fallback."""
+        env_val = os.environ.get(f"BRIEFING_{key.upper()}")
+        if env_val:
+            try:
+                return int(env_val)
+            except ValueError:
+                pass
+        return self.config.get(key, default)
+
     def save_status(self, output_dir: str = ".") -> None:
         """
         Save run status to JSON file for monitoring.
@@ -1092,6 +1182,38 @@ class BriefingRunner:
                 papers, blogs, news, previous_state
             )
 
+            # --- Build community picks: newsletter-extracted links + GitHub repos ---
+            community_picks: List[Dict[str, Any]] = []
+            for nl in newsletters:
+                text = (nl.get("snippet") or "") + " " + (nl.get("summary") or "")
+                for url in self._extract_urls_from_text(text):
+                    community_picks.append({
+                        "url": url,
+                        "title": nl.get("title", "Newsletter article"),
+                        "source": nl.get("source", "Newsletter"),
+                        "summary": "",
+                        "source_type": "newsletter",
+                    })
+            for repo in github_trending:
+                if repo.get("link"):
+                    community_picks.append({
+                        "url": repo["link"],
+                        "title": repo.get("title", ""),
+                        "name": repo.get("name", ""),
+                        "description": repo.get("description", ""),
+                        "summary": repo.get("summary", ""),
+                        "source": "GitHub Trending",
+                        "stars": repo.get("stars", ""),
+                        "language": repo.get("language", ""),
+                        "source_type": "github",
+                    })
+            if community_picks:
+                logger.info(
+                    f"Built {len(community_picks)} community picks "
+                    f"({len([c for c in community_picks if c['source_type'] == 'newsletter'])} newsletter, "
+                    f"{len([c for c in community_picks if c['source_type'] == 'github'])} GitHub)"
+                )
+
             # --- Intelligence layer: enrich data ---
             synthesis = {}
             emerging_themes = []
@@ -1106,16 +1228,22 @@ class BriefingRunner:
                         logger.info("=== Intelligence Layer: Stage 1 Relevance Filtering ===")
                         papers = self.intelligence.filter_papers_by_relevance(papers, interest_profile)
 
-                    # --- Parallel batch 1: papers, news, blogs are independent ---
-                    logger.info("=== Intelligence Layer: Parallel enrichment (papers/news/blogs) ===")
-                    with ThreadPoolExecutor(max_workers=3) as pool:
+                    # --- Parallel batch 1: papers, news, blogs, community_picks ---
+                    logger.info("=== Intelligence Layer: Parallel enrichment (papers/news/blogs/community) ===")
+                    interest_topics = self.config.get("interest_profile", [])
+                    with ThreadPoolExecutor(max_workers=4) as pool:
                         fut_papers = pool.submit(self._enrich_papers, papers, topics)
                         fut_news = pool.submit(self.intelligence.rank_and_summarize_news, news, topics)
                         fut_blogs = pool.submit(self.intelligence.rank_and_summarize_blogs, blogs, topics)
+                        fut_community = pool.submit(
+                            self.intelligence.rank_source_links,
+                            community_picks, interest_topics,
+                        )
 
                         papers = fut_papers.result()
                         news = fut_news.result()
                         blogs = fut_blogs.result()
+                        community_picks = fut_community.result()
 
                     # --- Parallel batch 2: stocks + themes (both depend on news) ---
                     with ThreadPoolExecutor(max_workers=2) as pool:
@@ -1214,31 +1342,53 @@ class BriefingRunner:
                     market_trend=market_trend,
                     weekly_deep_dive=weekly_deep_dive,
                     newsletters=newsletters,
-                    github_trending=github_trending,
+                    community_picks=community_picks,
                 )
 
                 # --- Generate NotebookLM podcast URL (fire-and-forget, ~10-20s) ---
                 if self.podcast_generator.enabled:
-                    # Only include items that scored well in the intelligence layer
-                    # (same score_combined >= 3 gate used by the rendered sections)
-                    _relevant_blogs = sorted(
-                        [b for b in blogs if b.get("link") and b.get("score_combined", 0) >= 3],
+                    # Collect source URLs from items that made it into the
+                    # rendered briefing (mirror render-method filter logic).
+                    _max_top = self._get_limit("max_top_papers_render", 3)
+                    _rendered_top = sorted(
+                        top_papers[:_max_top],
                         key=lambda x: x.get("score_combined", 0), reverse=True,
                     )
-                    _relevant_news = sorted(
-                        [n for n in news if n.get("url") and n.get("score_combined", 0) >= 3],
+                    if any(p.get("score_combined") for p in _rendered_top):
+                        _rendered_top = [p for p in _rendered_top if p.get("score_combined", 0) >= 3]
+
+                    _max_blogs = self._get_limit("max_blogs_render", 5)
+                    _rendered_blogs = sorted(
+                        blogs[:_max_blogs],
                         key=lambda x: x.get("score_combined", 0), reverse=True,
                     )
-                    # GitHub trending repos have no intelligence score but are curated
-                    # by GitHub itself — include top 2 directly.
-                    # Newsletters have no URL (email-only source) — excluded.
-                    _gh_urls = [g["link"] for g in github_trending[:2] if g.get("link")]
+                    if any(b.get("score_combined") for b in _rendered_blogs):
+                        _rendered_blogs = [b for b in _rendered_blogs if b.get("score_combined", 0) >= 3]
+
+                    _max_news = self._get_limit("max_news_render", 5)
+                    _rendered_news = news[:_max_news]
+
+                    _max_community = self._get_limit("max_community_picks", 8)
+                    _rendered_community = sorted(
+                        community_picks,
+                        key=lambda x: x.get("score_combined", 0), reverse=True,
+                    )
+                    if any(c.get("score_combined") for c in _rendered_community):
+                        _rendered_community = [
+                            c for c in _rendered_community
+                            if c.get("score_combined", 0) >= 3
+                        ]
+                    _rendered_community = _rendered_community[:_max_community]
+
                     source_urls = (
-                        [p["url"] for p in top_papers[:4] if p.get("url")]
-                        + [b["link"] for b in _relevant_blogs[:3]]
-                        + [n["url"] for n in _relevant_news[:1]]
-                        + _gh_urls
-                    )
+                        [p.get("url") or p.get("arxiv_url") for p in _rendered_top
+                         if p.get("url") or p.get("arxiv_url")]
+                        + [b["link"] for b in _rendered_blogs if b.get("link")]
+                        + [n["url"] for n in _rendered_news if n.get("url")]
+                        + [c.get("url") or c.get("link") for c in _rendered_community
+                           if c.get("url") or c.get("link")]
+                    )[:10]
+
                     podcast_url = self.podcast_generator.generate(
                         markdown_content, now, source_urls
                     )

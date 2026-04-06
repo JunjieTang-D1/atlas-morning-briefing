@@ -161,3 +161,148 @@ class TestStatus:
         status = json.loads(status_path.read_text())
         assert "timestamp" in status
         assert "elapsed_seconds" in status
+
+
+class TestExtractUrlsFromText:
+    def test_extracts_http_urls(self):
+        text = "Check out https://example.com/article/123 and http://blog.com/post/456"
+        urls = BriefingRunner._extract_urls_from_text(text)
+        assert len(urls) == 2
+        assert "https://example.com/article/123" in urls
+        assert "http://blog.com/post/456" in urls
+
+    def test_filters_tracking_urls(self):
+        text = "Real: https://example.com/article/123 Tracked: https://click.example.com/track?utm_source=email"
+        urls = BriefingRunner._extract_urls_from_text(text)
+        assert len(urls) == 1
+        assert "example.com/article/123" in urls[0]
+
+    def test_filters_social_urls(self):
+        text = "https://twitter.com/user/status/123 https://example.com/real-article"
+        urls = BriefingRunner._extract_urls_from_text(text)
+        assert len(urls) == 1
+        assert "example.com" in urls[0]
+
+    def test_filters_unsubscribe(self):
+        text = "https://example.com/real https://list.example.com/unsubscribe/abc"
+        urls = BriefingRunner._extract_urls_from_text(text)
+        assert len(urls) == 1
+
+    def test_deduplicates(self):
+        text = "https://example.com/article https://example.com/article"
+        urls = BriefingRunner._extract_urls_from_text(text)
+        assert len(urls) == 1
+
+    def test_empty_text(self):
+        assert BriefingRunner._extract_urls_from_text("") == []
+        assert BriefingRunner._extract_urls_from_text(None) == []
+
+    def test_caps_at_10(self):
+        text = " ".join(f"https://example.com/article/{i}" for i in range(20))
+        urls = BriefingRunner._extract_urls_from_text(text)
+        assert len(urls) <= 10
+
+    def test_strips_trailing_punctuation(self):
+        text = "See https://example.com/article/123."
+        urls = BriefingRunner._extract_urls_from_text(text)
+        assert urls[0] == "https://example.com/article/123"
+
+    def test_short_urls_filtered(self):
+        text = "https://a.co https://example.com/real/article"
+        urls = BriefingRunner._extract_urls_from_text(text)
+        assert len(urls) == 1
+        assert "example.com" in urls[0]
+
+
+class TestGetLimit:
+    def test_env_var_override(self, runner, monkeypatch):
+        monkeypatch.setenv("BRIEFING_MAX_BLOGS_RENDER", "12")
+        assert runner._get_limit("max_blogs_render", 5) == 12
+
+    def test_config_fallback(self, runner):
+        runner.config["max_blogs_render"] = 8
+        assert runner._get_limit("max_blogs_render", 5) == 8
+
+    def test_default_fallback(self, runner):
+        assert runner._get_limit("max_blogs_render", 5) == 5
+
+    def test_env_var_invalid_uses_config(self, runner, monkeypatch):
+        monkeypatch.setenv("BRIEFING_MAX_BLOGS_RENDER", "not_a_number")
+        runner.config["max_blogs_render"] = 7
+        assert runner._get_limit("max_blogs_render", 5) == 7
+
+
+class TestRenderCommunityPicks:
+    def test_renders_scored_github_items(self, runner):
+        items = [{
+            "url": "https://github.com/org/repo",
+            "title": "awesome-agents",
+            "source": "GitHub Trending",
+            "source_type": "github",
+            "score_combined": 4,
+            "stars": "1.2k",
+            "language": "Python",
+            "brief_summary": "A collection of AI agent tools.",
+        }]
+        md = runner._render_community_picks(items)
+        assert "Community & Newsletter Picks" in md
+        assert "awesome-agents" in md
+        assert "GitHub" in md
+        assert "1.2k stars" in md
+
+    def test_renders_newsletter_items(self, runner):
+        items = [{
+            "url": "https://blog.com/article",
+            "title": "AI Agent Patterns",
+            "source": "The Batch",
+            "source_type": "newsletter",
+            "score_combined": 5,
+            "brief_summary": "Key patterns for building agents.",
+        }]
+        md = runner._render_community_picks(items)
+        assert "AI Agent Patterns" in md
+        assert "via The Batch" in md
+
+    def test_filters_low_scores(self, runner):
+        items = [
+            {"url": "https://a.com", "title": "Good", "source": "S",
+             "score_combined": 4, "source_type": "github"},
+            {"url": "https://b.com", "title": "Bad", "source": "S",
+             "score_combined": 2, "source_type": "github"},
+        ]
+        md = runner._render_community_picks(items)
+        assert "Good" in md
+        assert "Bad" not in md
+
+    def test_empty_returns_empty(self, runner):
+        assert runner._render_community_picks([]) == ""
+
+    def test_no_scores_shows_all(self, runner):
+        items = [
+            {"url": "https://a.com", "title": "Item A", "source": "S", "source_type": "github"},
+            {"url": "https://b.com", "title": "Item B", "source": "S", "source_type": "newsletter"},
+        ]
+        md = runner._render_community_picks(items)
+        assert "Item A" in md
+        assert "Item B" in md
+
+
+class TestSectionOrder:
+    def test_community_picks_replaces_github_trending(self):
+        assert "community_picks" in BriefingRunner.DEFAULT_SECTION_ORDER
+        assert "github_trending" not in BriefingRunner.DEFAULT_SECTION_ORDER
+
+    def test_community_picks_in_briefing(self, runner):
+        community = [{
+            "url": "https://github.com/x/y",
+            "title": "Cool Repo",
+            "source": "GitHub Trending",
+            "source_type": "github",
+            "score_combined": 5,
+            "brief_summary": "Very cool.",
+        }]
+        md = runner.generate_markdown_briefing(
+            [], [], [], [], [], community_picks=community,
+        )
+        assert "Community & Newsletter Picks" in md
+        assert "Cool Repo" in md

@@ -159,10 +159,19 @@ num_paper_picks: 3
 # Date range for arxiv search (days)
 arxiv_days_back: 3
 
-# Maximum items per section
+# Maximum items to fetch per section (API/scanner limits)
 max_papers: 30
 max_blogs: 12
 max_news: 15
+
+# Render limits: items shown per briefing section
+# Override via env vars: BRIEFING_MAX_BLOGS_RENDER=8, BRIEFING_MAX_COMMUNITY_PICKS=12, etc.
+max_top_papers_render: 3
+max_papers_render: 5
+max_blogs_render: 5
+max_news_render: 5
+max_newsletters_render: 10
+max_community_picks: 8
 
 # PDF settings
 pdf:

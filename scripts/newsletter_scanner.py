@@ -59,7 +59,7 @@ class NewsletterScanner:
             f"{self.supabase_url.rstrip('/')}/rest/v1/email_classifications"
             f"?should_include_in_digest=eq.true"
             f"&digest_included_at=is.null"
-            f"&select=id,subject,from_name,from_address,summary,category,created_at"
+            f"&select=id,subject,from_name,from_address,summary,snippet,category,created_at"
             f"&order=created_at.desc"
             f"&limit={self.max_items}"
         )
@@ -87,6 +87,7 @@ class NewsletterScanner:
                     "title": row.get("subject", ""),
                     "link": "",
                     "summary": row.get("summary", ""),
+                    "snippet": row.get("snippet", ""),
                     "published": row.get("created_at", ""),
                     "category": row.get("category", ""),
                 })

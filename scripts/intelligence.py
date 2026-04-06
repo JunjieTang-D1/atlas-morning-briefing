@@ -748,6 +748,81 @@ class BriefingIntelligence:
 
         return self._enforce_source_diversity(blogs, max_per_source=2)[:5]
 
+    def rank_source_links(
+        self, items: List[Dict[str, Any]], topics: List[str]
+    ) -> List[Dict[str, Any]]:
+        """
+        Score mixed items (newsletter-extracted links + GitHub repos) for relevance.
+
+        Uses the same LLM scoring pattern as rank_and_summarize_blogs().
+
+        Args:
+            items: List of dicts with url/link, title, description/summary, source.
+            topics: Interest profile topics (strings or dicts with 'topic' key).
+
+        Returns:
+            Items enriched with score_combined + brief_summary, sorted desc.
+            Unscored items omitted. Returns [] on LLM failure.
+        """
+        if not self.available or not items:
+            return items[:10] if items else []
+
+        lines = []
+        for i, item in enumerate(items[:15], 1):
+            title = _sanitize_prompt_input(
+                item.get("title") or item.get("name") or "", max_length=150
+            )
+            desc = _sanitize_prompt_input(
+                item.get("description") or item.get("summary") or "", max_length=250
+            )
+            source = _sanitize_prompt_input(item.get("source") or "", max_length=60)
+            url = item.get("url") or item.get("link") or ""
+            lines.append(f"[{i}] {title} ({source}): {desc}\n    URL: {url}")
+
+        items_block = "\n".join(lines)
+        topics_str = ", ".join(
+            t if isinstance(t, str) else t.get("topic", "")
+            for t in topics[:6]
+        )
+
+        prompt = (
+            "Rate these tech/AI resources for relevance to a daily AI "
+            "practitioner briefing.\n\n"
+            f"<interests>{topics_str}</interests>\n"
+            f"<items>\n{items_block}\n</items>\n\n"
+            "For each of your top picks, respond in this exact format:\n"
+            "[original_number] SCORE:X/5 1-2 sentence summary of why this "
+            "is relevant.\n\n"
+            "SCORE: 5=core AI/ML content, 3=tangentially relevant, "
+            "1=off-topic.\n"
+            "Skip tracking URLs, login pages, or noise. "
+            "Respond ONLY with the numbered scores, no preamble."
+        )
+
+        result = self.bedrock.invoke(
+            prompt, tier="light", max_tokens=600,
+            system_prompt=SYSTEM_PROMPT, name="rank_source_links",
+        )
+        if not result:
+            return []
+
+        scored = []
+        for idx, text in self._parse_ranked_response(result):
+            if 0 <= idx < len(items):
+                score, summary = self.extract_score(text)
+                if score is not None:
+                    item = items[idx].copy()
+                    item["score_combined"] = score
+                    item["brief_summary"] = summary
+                    scored.append(item)
+
+        diversified = self._enforce_source_diversity(
+            sorted(scored, key=lambda x: x.get("score_combined", 0), reverse=True),
+            max_per_source=3,
+        )
+        logger.info(f"Ranked {len(diversified)} source links")
+        return diversified[:10]
+
     @staticmethod
     def _enforce_source_diversity(
         items: List[Dict[str, Any]], max_per_source: int = 2
