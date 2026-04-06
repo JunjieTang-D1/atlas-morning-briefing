@@ -79,10 +79,6 @@ class ObsidianWriter:
             logger.warning(f"Obsidian PUT {path} failed: {e}")
             return False
 
-    def _note_exists(self, path: str) -> bool:
-        """Check if a note exists via GET (returns bool)."""
-        return self._get_note(path) is not None
-
     # ------------------------------------------------------------------
     # Frontmatter helpers
     # ------------------------------------------------------------------

@@ -21,7 +21,6 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 from urllib.parse import urlparse
 
-import yaml
 
 # Ensure scripts directory is on path for imports
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -42,6 +41,7 @@ from opentelemetry import trace
 from scripts.tracing import setup_tracing, get_tracer
 from scripts.obsidian_writer import ObsidianWriter
 from scripts.podcast_generator import PodcastGenerator
+from scripts.utils import load_config
 
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
@@ -659,30 +659,6 @@ class BriefingRunner:
                 md.append(f"**[{article_title}]({link})** *({source})*{score_tag}\n")
             else:
                 md.append(f"**{article_title}** *({source})*{score_tag}\n")
-            if summary:
-                md.append(f"{summary}\n")
-            md.append("\n")
-        return "".join(md)
-
-    def _render_github_trending(self, repos: List[Dict[str, Any]]) -> str:
-        """Render GitHub trending repos section."""
-        md = ["## GitHub Trending\n\n"]
-        for repo in repos:
-            title = repo.get("title", "")
-            link = repo.get("link", "")
-            summary = repo.get("summary", "")
-            stars = repo.get("stars", "")
-            language = repo.get("language", "")
-            tags = []
-            if stars:
-                tags.append(f"{stars} stars")
-            if language:
-                tags.append(language)
-            tag_str = f" ({', '.join(tags)})" if tags else ""
-            if link:
-                md.append(f"**[{title}]({link})**{tag_str}\n")
-            else:
-                md.append(f"**{title}**{tag_str}\n")
             if summary:
                 md.append(f"{summary}\n")
             md.append("\n")
@@ -1465,18 +1441,6 @@ class BriefingRunner:
             logger.info("Completed successfully")
             return 0
 
-
-def load_config(config_path: str) -> Dict[str, Any]:
-    """Load configuration from YAML file."""
-    try:
-        with open(config_path, "r") as f:
-            return yaml.safe_load(f)
-    except FileNotFoundError:
-        logger.error(f"Config file not found: {config_path}")
-        sys.exit(2)
-    except yaml.YAMLError as e:
-        logger.error(f"Failed to parse config file: {e}")
-        sys.exit(2)
 
 
 def main() -> int:

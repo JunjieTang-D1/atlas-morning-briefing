@@ -143,15 +143,6 @@ class TestRestHelpers:
         mock_put.side_effect = req.ConnectionError("refused")
         assert writer._put_note("test.md", "content") is False
 
-    @patch("scripts.obsidian_writer.requests.get")
-    def test_note_exists_true(self, mock_get, writer):
-        mock_get.return_value = MagicMock(status_code=200, text="content", raise_for_status=lambda: None)
-        assert writer._note_exists("test.md") is True
-
-    @patch("scripts.obsidian_writer.requests.get")
-    def test_note_exists_false(self, mock_get, writer):
-        mock_get.return_value = MagicMock(status_code=404)
-        assert writer._note_exists("missing.md") is False
 
 
 class TestFrontmatterEdgeCases:

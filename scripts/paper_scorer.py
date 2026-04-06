@@ -16,8 +16,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List
 
-import yaml
 from sklearn.feature_extraction.text import TfidfVectorizer
+
+from scripts.utils import load_config
 from sklearn.metrics.pairwise import cosine_similarity
 
 
@@ -301,29 +302,6 @@ class PaperScorer:
         logger.info(f"Selected top {len(top_picks)} papers for reproduction")
         return top_picks
 
-
-def load_config(config_path: str) -> Dict[str, Any]:
-    """
-    Load configuration from YAML file.
-
-    Args:
-        config_path: Path to config file
-
-    Returns:
-        Configuration dictionary
-
-    Raises:
-        SystemExit: If config file cannot be loaded
-    """
-    try:
-        with open(config_path, "r") as f:
-            return yaml.safe_load(f)
-    except FileNotFoundError:
-        logger.error(f"Config file not found: {config_path}")
-        sys.exit(2)
-    except yaml.YAMLError as e:
-        logger.error(f"Failed to parse config file: {e}")
-        sys.exit(2)
 
 
 def main() -> int:
