@@ -1,4 +1,4 @@
-name: Build and Publish Atlas Morning Briefing
+name: Build and Publish Personal Morning Briefing
 
 on:
   workflow_dispatch: {}

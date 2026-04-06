@@ -195,11 +195,11 @@ llm:
 # Configure via standard OTel env vars:
 #   OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318   (e.g. Grafana Tempo, Jaeger, Langfuse OTel)
 #   OTEL_EXPORTER_OTLP_HEADERS=Authorization=Bearer <token>
-#   OTEL_SERVICE_NAME=atlas-morning-briefing  (optional override)
+#   OTEL_SERVICE_NAME=personal-morning-briefing  (optional override)
 # Set enabled: false to suppress all tracing even when env vars are present
 otel:
   enabled: true
-  service_name: "atlas-morning-briefing"
+  service_name: "personal-morning-briefing"
 
 # Newsletter source (from n8n email-ingestion workflow via Supabase)
 # Fetches classified newsletter emails and includes them in the briefing

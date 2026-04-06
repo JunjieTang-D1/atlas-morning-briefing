@@ -1,4 +1,4 @@
-# Atlas Morning Briefing
+# Personal Morning Briefing
 
 > **IMPORTANT NOTICE: This project is NOT production-ready. It is provided strictly for testing, experimentation, and educational purposes only. This code has NOT undergone AWS security review and is NOT intended for deployment in production environments or for use with real end-users. Use at your own risk. No guarantees are made regarding security, reliability, availability, or fitness for any particular purpose.**
 
@@ -30,7 +30,7 @@ Supports **Claude Sonnet 4, Kimi K2.5, GLM 4.7, DeepSeek V3.2, Nova Pro, and Nov
 ### Pipeline Steps
 
 1. **Fetch** — ArXiv papers, RSS blogs, and stock quotes are fetched in parallel (3 threads). News queries run after optional dynamic query generation from the intelligence layer.
-2. **Deduplicate** — Same-day news/blog overlap removed by URL domain and title. Similar papers collapsed at >85% title similarity (SequenceMatcher). Cross-day dedup skips items from yesterday's briefing via `.atlas-state.json`.
+2. **Deduplicate** — Same-day news/blog overlap removed by URL domain and title. Similar papers collapsed at >85% title similarity (SequenceMatcher). Cross-day dedup skips items from yesterday's briefing via `.personal-state.json`.
 3. **Filter & Score** — Papers scored by a weighted formula: `has_code×7 + topic_match×3 + recency×2 + citation×1`, with infrastructure penalties for datacenter-scale or theory-only work. LLM semantic scoring optionally supplements TF-IDF.
 4. **Enrich** — Three parallel LLM calls: paper summarization + semantic scoring, news ranking, blog ranking. Then two more: stock-news correlation, emerging theme detection.
 5. **Assess** — Top papers evaluated for reproduction feasibility across 5 dimensions (code availability, data access, infrastructure needs, Bedrock compatibility, engineering effort), each scored 0-5. Papers below the configurable gate (default 12/25) are dropped.

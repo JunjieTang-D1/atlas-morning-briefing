@@ -16,7 +16,7 @@ from typing import Any, Dict, Optional
 import requests
 from opentelemetry import trace
 
-_llm_tracer = trace.get_tracer("atlas.llm")
+_llm_tracer = trace.get_tracer("personal.llm")
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 logger = logging.getLogger(__name__)

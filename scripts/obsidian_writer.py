@@ -161,7 +161,7 @@ class ObsidianWriter:
 
         fm_fields: Dict[str, Any] = {
             "type": "source/briefing",
-            "source": "atlas-morning-briefing",
+            "source": "personal-morning-briefing",
             "created": date_str,
             "updated": date_str,
             "papers-found": status.get("papers_found", 0),

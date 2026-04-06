@@ -211,7 +211,7 @@ python3 scripts/paper_scorer.py --input papers.json --config config.yaml --outpu
 ### Generate PDF Only
 
 ```bash
-python3 scripts/pdf_generator.py --input briefing.md --output Atlas-Briefing.pdf --format kindle
+python3 scripts/pdf_generator.py --input briefing.md --output Personal-Briefing.pdf --format kindle
 ```
 
 ## Run Status
@@ -368,7 +368,7 @@ briefing_runner.py (orchestrator)
 ├── [Intelligence] Reproduction assessment (Bedrock Medium)
 ├── [Intelligence] Cross-section synthesis (Bedrock Heavy)
 ├── [Generate markdown briefing with editorial content]
-├── pdf_generator.py → Atlas-Briefing.pdf
+├── pdf_generator.py → Personal-Briefing.pdf
 ├── kindle_sender.py → Email to Kindle
 └── [Save status.json]
 ```

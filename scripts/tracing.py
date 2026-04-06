@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # Copyright (c) 2026 Junjie Tang. MIT License. See LICENSE file for details.
 """
-OpenTelemetry setup for atlas-morning-briefing.
+OpenTelemetry setup for personal-morning-briefing.
 
 Initializes the OTel SDK when OTEL_EXPORTER_OTLP_ENDPOINT is set.
 If the env var is absent (or otel.enabled is false), the global NoOpTracerProvider
@@ -50,7 +50,7 @@ def setup_tracing(config: Dict[str, Any]) -> None:
 
     service_name = os.getenv(
         "OTEL_SERVICE_NAME",
-        otel_cfg.get("service_name", "atlas-morning-briefing"),
+        otel_cfg.get("service_name", "personal-morning-briefing"),
     )
     resource = Resource({SERVICE_NAME: service_name})
     provider = TracerProvider(resource=resource)
@@ -68,6 +68,6 @@ def setup_tracing(config: Dict[str, Any]) -> None:
     logger.info(f"OTel tracing enabled → {endpoint} (service={service_name})")
 
 
-def get_tracer(name: str = "atlas.briefing") -> trace.Tracer:
+def get_tracer(name: str = "personal.briefing") -> trace.Tracer:
     """Return a tracer from the current provider (NoOp if not initialised)."""
     return trace.get_tracer(name)

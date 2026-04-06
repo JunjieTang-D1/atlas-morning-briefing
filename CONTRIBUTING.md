@@ -1,4 +1,4 @@
-# Contributing to Atlas Morning Briefing
+# Contributing to Personal Morning Briefing
 
 Thank you for your interest in contributing!
 

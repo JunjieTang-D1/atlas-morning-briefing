@@ -14,6 +14,6 @@ logs/
 !config.yaml.example
 venv/
 .venv/
-.atlas-state.json
+.personal-state.json
 status.json
 config.yaml

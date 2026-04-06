@@ -19,7 +19,7 @@ dist/
 *.pdf
 
 # Runtime data
-.atlas-state.json
+.personal-state.json
 state.json
 status.json
 blogs.json
@@ -44,4 +44,4 @@ logs/*.log
 !SECURITY_FIXES.md
 !examples/*.md
 !references/*.md
-atlas-morning-briefing.json
+personal-morning-briefing.json

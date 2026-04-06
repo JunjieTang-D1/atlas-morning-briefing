@@ -87,7 +87,7 @@ This generates the PDF without sending. Then test email:
 
 ```bash
 python3 scripts/kindle_sender.py \
-  --pdf Atlas-Briefing-Daily-2026.03.06.pdf \
+  --pdf Personal-Briefing-Daily-2026.03.06.pdf \
   --kindle-email your_username@kindle.com
 ```
 
