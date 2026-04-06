@@ -47,7 +47,7 @@ from scripts.podcast_generator import PodcastGenerator
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 logger = logging.getLogger(__name__)
 
-STATE_FILENAME = ".atlas-state.json"
+STATE_FILENAME = ".personal-state.json"
 
 
 class BriefingRunner:
@@ -1040,7 +1040,7 @@ class BriefingRunner:
         now = datetime.now()
         today_str = now.strftime("%Y-%m-%d")
 
-        with self._tracer.start_as_current_span("atlas.briefing.run") as root_span:
+        with self._tracer.start_as_current_span("personal.briefing.run") as root_span:
             root_span.set_attribute("briefing.date", today_str)
             root_span.set_attribute("briefing.dry_run", self.dry_run)
 
@@ -1055,7 +1055,7 @@ class BriefingRunner:
 
             # --- Run scanners in parallel (papers + blogs + stocks + newsletters) ---
             from concurrent.futures import ThreadPoolExecutor
-            with self._tracer.start_as_current_span("atlas.fetch"):
+            with self._tracer.start_as_current_span("personal.fetch"):
                 logger.info("=== Parallel data fetch (papers/blogs/stocks/newsletters) ===")
                 with ThreadPoolExecutor(max_workers=5) as pool:
                     fut_papers = pool.submit(self.run_arxiv_scan, topics)
@@ -1078,7 +1078,7 @@ class BriefingRunner:
                     previous_state, news_queries
                 )
 
-            with self._tracer.start_as_current_span("atlas.fetch.news"):
+            with self._tracer.start_as_current_span("personal.fetch.news"):
                 news = self.run_news_aggregation(queries=news_queries)
 
             # --- Cross-section deduplication ---
@@ -1096,7 +1096,7 @@ class BriefingRunner:
             synthesis = {}
             emerging_themes = []
             if self.intelligence.available:
-                with self._tracer.start_as_current_span("atlas.enrich"):
+                with self._tracer.start_as_current_span("personal.enrich"):
                     logger.info("=== Intelligence Layer: Enriching Data ===")
                     from concurrent.futures import ThreadPoolExecutor, as_completed
 
@@ -1143,7 +1143,7 @@ class BriefingRunner:
 
             # --- Intelligence layer: assess top papers & synthesize ---
             if self.intelligence.available:
-                with self._tracer.start_as_current_span("atlas.synthesize"):
+                with self._tracer.start_as_current_span("personal.synthesize"):
                     top_papers = self.intelligence.assess_reproduction_feasibility(top_papers)
 
                     # Ensure top 3 papers all have summaries (batched)
@@ -1205,7 +1205,7 @@ class BriefingRunner:
                 return 2
 
             podcast_url: Optional[str] = None
-            with self._tracer.start_as_current_span("atlas.render"):
+            with self._tracer.start_as_current_span("personal.render"):
                 # --- Generate markdown briefing ---
                 filename = self._format_filename(now)
                 self._briefing_title = filename
@@ -1229,10 +1229,15 @@ class BriefingRunner:
                         [n for n in news if n.get("url") and n.get("score_combined", 0) >= 3],
                         key=lambda x: x.get("score_combined", 0), reverse=True,
                     )
+                    # GitHub trending repos have no intelligence score but are curated
+                    # by GitHub itself — include top 2 directly.
+                    # Newsletters have no URL (email-only source) — excluded.
+                    _gh_urls = [g["link"] for g in github_trending[:2] if g.get("link")]
                     source_urls = (
                         [p["url"] for p in top_papers[:4] if p.get("url")]
-                        + [b["link"] for b in _relevant_blogs[:4]]
-                        + [n["url"] for n in _relevant_news[:2]]
+                        + [b["link"] for b in _relevant_blogs[:3]]
+                        + [n["url"] for n in _relevant_news[:1]]
+                        + _gh_urls
                     )
                     podcast_url = self.podcast_generator.generate(
                         markdown_content, now, source_urls
