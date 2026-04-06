@@ -3,7 +3,6 @@
 
 from unittest.mock import patch, MagicMock
 
-import pytest
 import requests as req_lib
 from scripts.github_trending_scanner import GitHubTrendingScanner
 

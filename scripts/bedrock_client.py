@@ -10,7 +10,7 @@ Supports multiple models with automatic fallback.
 import json
 import logging
 import os
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
 try:
     import boto3

@@ -57,7 +57,7 @@ class TestParseArxivResponse:
         assert paper["pdf_link"] == "http://arxiv.org/pdf/2401.00001v1"
 
     def test_filters_by_date(self, scanner):
-        from datetime import datetime, timedelta, timezone
+        from datetime import datetime, timezone
         # Start date after the old paper
         start_date = datetime(2025, 1, 1, tzinfo=timezone.utc)
         papers = scanner._parse_arxiv_response(SAMPLE_ARXIV_XML, start_date)

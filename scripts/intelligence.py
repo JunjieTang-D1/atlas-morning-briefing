@@ -107,7 +107,7 @@ class BriefingIntelligence:
             if clean.startswith("[") and "]" in clean[:8]:
                 # Save previous item
                 if current_idx >= 0 and current_lines:
-                    full_text = " ".join(l for l in current_lines if l)
+                    full_text = " ".join(line for line in current_lines if line)
                     if full_text.strip():
                         items.append((current_idx, full_text.strip()))
 
@@ -131,7 +131,7 @@ class BriefingIntelligence:
 
         # Save last item
         if current_idx >= 0 and current_lines:
-            full_text = " ".join(l for l in current_lines if l)
+            full_text = " ".join(line for line in current_lines if line)
             if full_text.strip():
                 items.append((current_idx, full_text.strip()))
 
@@ -1267,7 +1267,6 @@ class BriefingIntelligence:
                 if idx < len(current_items):
                     item_type = current_items[idx].split("]")[0][1:]  # Extract type: paper/blog/news
                     if item_type == "paper" and idx < len(papers):
-                        orig_summary = papers[idx].get("brief_summary", "")
                         # Annotate as trending but DON'T inject "Day N" into summary text
                         # (user found it confusing in final output)
                         papers[idx]["_trending_days"] = day_count
@@ -1275,13 +1274,11 @@ class BriefingIntelligence:
                     elif item_type == "blog":
                         blog_idx = idx - len([i for i in current_items[:idx] if "[paper]" in i])
                         if 0 <= blog_idx < len(blogs):
-                            orig_summary = blogs[blog_idx].get("brief_summary", "")
                             blogs[blog_idx]["_trending_days"] = day_count
                             annotated_count += 1
                     elif item_type == "news":
                         news_idx = idx - len([i for i in current_items[:idx] if "[paper]" in i or "[blog]" in i])
                         if 0 <= news_idx < len(news):
-                            orig_summary = news[news_idx].get("brief_summary", "")
                             news[news_idx]["_trending_days"] = day_count
                             annotated_count += 1
 
@@ -1295,7 +1292,7 @@ class BriefingIntelligence:
                 }
 
         # Clean up old trending topics (older than 3 days)
-        from datetime import datetime, timedelta
+        from datetime import datetime
         today_date = datetime.strptime(today, "%Y-%m-%d")
         cleaned_trending = {}
         for topic_key, info in updated_trending.items():

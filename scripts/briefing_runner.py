@@ -1220,7 +1220,7 @@ class BriefingRunner:
             if self.intelligence.available:
                 with self._tracer.start_as_current_span("personal.enrich"):
                     logger.info("=== Intelligence Layer: Enriching Data ===")
-                    from concurrent.futures import ThreadPoolExecutor, as_completed
+                    from concurrent.futures import ThreadPoolExecutor
 
                     # Two-stage relevance filtering (NEW) — must run first (reduces paper count)
                     interest_profile = self.config.get("interest_profile")

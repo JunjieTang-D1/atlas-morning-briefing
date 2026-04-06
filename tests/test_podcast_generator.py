@@ -191,7 +191,8 @@ class TestGenerateDisabled:
         result = gen.generate("content", datetime.now())
         assert result is None
 
-    def test_returns_none_no_auth_configured(self, config_enabled, monkeypatch):
+    def test_returns_none_no_auth_configured(self, config_enabled, monkeypatch, tmp_path):
+        monkeypatch.setenv("HOME", str(tmp_path))  # prevent ~/.notebooklm/storage_state.json fallback
         monkeypatch.delenv("NOTEBOOKLM_STORAGE_STATE_PATH", raising=False)
         monkeypatch.delenv("NOTEBOOKLM_STORAGE_STATE_B64", raising=False)
         gen = PodcastGenerator(config_enabled)  # no storage_state_path in config

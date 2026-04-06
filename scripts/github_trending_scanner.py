@@ -81,9 +81,6 @@ class GitHubTrendingScanner:
                 metadata = row.get("metadata") or {}
                 stars = metadata.get("stars", "")
                 language = metadata.get("language", "")
-                star_tag = f" ({stars} stars)" if stars else ""
-                lang_tag = f" [{language}]" if language else ""
-
                 items.append({
                     "source": "GitHub Trending",
                     "title": row.get("title", ""),

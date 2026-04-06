@@ -2,7 +2,7 @@
 """Tests for intelligence module."""
 
 import pytest
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 from scripts.intelligence import BriefingIntelligence, _parse_numbered_list
 
 
@@ -228,7 +228,7 @@ class TestRankSourceLinks:
         mock_intelligence.bedrock.invoke.return_value = "[1] SCORE:3/5 Relevant."
         items = [{"url": "https://ex.com", "title": "T", "source": "S"}]
         topics = [{"topic": "Agentic AI", "weight": 1.0}]
-        result = mock_intelligence.rank_source_links(items, topics)
+        mock_intelligence.rank_source_links(items, topics)
         prompt = mock_intelligence.bedrock.invoke.call_args[0][0]
         assert "Agentic AI" in prompt
 

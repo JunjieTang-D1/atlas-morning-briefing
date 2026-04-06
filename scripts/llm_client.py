@@ -7,7 +7,6 @@ Primary: MiniMax 2.7 via Anthropic-compatible API.
 Fallback: OpenRouter free models via OpenAI-compatible API.
 """
 
-import json
 import logging
 import os
 import re

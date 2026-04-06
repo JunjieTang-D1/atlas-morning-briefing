@@ -1,10 +1,8 @@
 # Copyright (c) 2026 Junjie Tang. MIT License. See LICENSE file for details.
 """Tests for LLM client module."""
 
-import json
 from unittest.mock import patch, MagicMock
 
-import pytest
 import requests as req_lib
 from scripts.llm_client import LLMClient
 

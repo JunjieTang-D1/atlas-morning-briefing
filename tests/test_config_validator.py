@@ -1,7 +1,6 @@
 # Copyright (c) 2026 Junjie Tang. MIT License. See LICENSE file for details.
 """Tests for config_validator module."""
 
-import pytest
 from scripts.config_validator import validate_config, check_environment
 
 
