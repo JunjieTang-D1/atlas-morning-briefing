@@ -133,6 +133,22 @@ obsidian:
   briefing_folder: "Sources/Briefings"
   trending_threshold: 3  # days before concept auto-promotion
 
+# NotebookLM Audio Overview podcast
+# Generates a conversational podcast from the daily briefing and sends as MP3 email attachment.
+# Auth: run `notebooklm login` locally to create ~/.notebooklm/storage_state.json
+# Production (k8s): set NOTEBOOKLM_STORAGE_STATE_B64 (base64-encoded storage_state.json)
+podcast:
+  enabled: false
+  audio_format: "brief"    # brief | deep-dive | critique | debate
+  audio_length: "short"    # short | default | long
+  max_wait_seconds: 1200   # give up after 20 min
+  include_paper_urls: true # add top paper URLs as NotebookLM sources for richer grounding
+  instructions: >
+    Create a concise executive briefing podcast covering today's most important
+    AI research papers, news, and emerging trends. Focus on practical implications
+    and highlight the top 2-3 most significant developments.
+  # storage_state_path: "~/.notebooklm/storage_state.json"  # override for local dev
+
 # File naming pattern
 file_naming: "Atlas-Briefing-{yyyy}.{mm}.{dd}"
 

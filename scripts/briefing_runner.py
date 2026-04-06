@@ -41,6 +41,7 @@ from scripts.github_trending_scanner import GitHubTrendingScanner
 from opentelemetry import trace
 from scripts.tracing import setup_tracing, get_tracer
 from scripts.obsidian_writer import ObsidianWriter
+from scripts.podcast_generator import PodcastGenerator
 
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
@@ -88,6 +89,10 @@ class BriefingRunner:
         self.intelligence = BriefingIntelligence(self.llm, config)
         self.newsletter_scanner = None  # Initialized in run_newsletter_scan
         self.status["intelligence_enabled"] = self.intelligence.available
+
+        # Initialize podcast generator (requires notebooklm-py + auth)
+        podcast_config = config.get("podcast", {})
+        self.podcast_generator = PodcastGenerator(podcast_config)
 
         # Initialize OTel tracing (no-op if OTEL_EXPORTER_OTLP_ENDPOINT not set)
         setup_tracing(config)
@@ -949,6 +954,51 @@ class BriefingRunner:
             self.errors.append(f"Obsidian publish: {e}")
             return {}
 
+    def generate_podcast(
+        self,
+        markdown_content: str,
+        date: datetime,
+        top_papers: List[Dict[str, Any]],
+        filename: str,
+    ) -> None:
+        """Generate NotebookLM Audio Overview and send via email."""
+        if not self.podcast_generator.enabled:
+            return
+
+        source_urls = [p["url"] for p in top_papers if p.get("url")]
+        audio_bytes = self.podcast_generator.generate(markdown_content, date, source_urls)
+
+        if not audio_bytes:
+            logger.info("No podcast audio generated (failed or timed out)")
+            return
+
+        recipients = self.config.get("email_recipients", [])
+        if not recipients:
+            logger.warning("Podcast audio generated but no email_recipients configured")
+            return
+
+        if self.dry_run:
+            logger.info(f"Dry run: skipping podcast email ({len(audio_bytes) // 1024} KB)")
+            return
+
+        sender_email = os.environ.get("GMAIL_USER")
+        sender_password = os.environ.get("GMAIL_APP_PASSWORD")
+        if not sender_email or not sender_password:
+            logger.warning("Gmail credentials not set, skipping podcast email")
+            return
+
+        mp3_filename = filename.replace(".md", "") + ".mp3"
+        distributor = EmailDistributor(sender_email=sender_email, sender_password=sender_password)
+        results = distributor.send_podcast_email(
+            recipients=recipients,
+            audio_bytes=audio_bytes,
+            filename=mp3_filename,
+            date=date,
+        )
+        sent = sum(1 for v in results.values() if v)
+        logger.info(f"Podcast email: {sent}/{len(recipients)} sent")
+        self.status["podcast_sent"] = sent > 0
+
     def save_status(self, output_dir: str = ".") -> None:
         """
         Save run status to JSON file for monitoring.
@@ -1236,6 +1286,9 @@ class BriefingRunner:
             briefing_name=filename,
             weekly_items=weekly_items,
         )
+
+        # --- Generate NotebookLM podcast (runs after main email, non-blocking on failure) ---
+        self.generate_podcast(markdown_content, now, top_papers, filename)
 
         # --- Mark newsletters as digested in Supabase ---
         ns_config = self.config.get("newsletter_source", {})

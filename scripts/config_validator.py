@@ -154,6 +154,30 @@ def validate_config(config: Dict[str, Any]) -> Tuple[bool, List[str]]:
                     "obsidian.trending_threshold must be a positive integer"
                 )
 
+    # --- Podcast config ---
+    podcast = config.get("podcast")
+    if podcast is not None:
+        if not isinstance(podcast, dict):
+            errors.append("'podcast' must be a dictionary")
+        else:
+            valid_formats = {"brief", "deep-dive", "deep_dive", "critique", "debate"}
+            fmt = podcast.get("audio_format", "brief")
+            if fmt.lower().replace("-", "_") not in {f.replace("-", "_") for f in valid_formats}:
+                errors.append(
+                    f"podcast.audio_format must be one of: brief, deep-dive, critique, debate; got '{fmt}'"
+                )
+            valid_lengths = {"short", "default", "long"}
+            length = podcast.get("audio_length", "short")
+            if length.lower() not in valid_lengths:
+                errors.append(
+                    f"podcast.audio_length must be one of: short, default, long; got '{length}'"
+                )
+            max_wait = podcast.get("max_wait_seconds")
+            if max_wait is not None and (
+                not isinstance(max_wait, (int, float)) or max_wait < 60
+            ):
+                errors.append("podcast.max_wait_seconds must be a number >= 60")
+
     # --- Log results ---
     for w in warnings:
         logger.warning(f"Config warning: {w}")
@@ -206,6 +230,20 @@ def check_environment(config: Dict[str, Any], dry_run: bool = False) -> List[str
         if not os.environ.get("OBSIDIAN_API_KEY"):
             warnings.append(
                 "OBSIDIAN_API_KEY not set -- Obsidian publish will be skipped"
+            )
+
+    # Podcast requires NotebookLM storage state
+    podcast = config.get("podcast", {})
+    if podcast.get("enabled", False):
+        has_path = (
+            podcast.get("storage_state_path")
+            or os.environ.get("NOTEBOOKLM_STORAGE_STATE_PATH")
+            or os.environ.get("NOTEBOOKLM_STORAGE_STATE_B64")
+        )
+        if not has_path:
+            warnings.append(
+                "podcast.enabled is true but no NotebookLM auth configured. "
+                "Run `notebooklm login` or set NOTEBOOKLM_STORAGE_STATE_B64."
             )
 
     for w in warnings:
