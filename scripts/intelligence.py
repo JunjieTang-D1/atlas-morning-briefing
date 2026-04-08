@@ -992,6 +992,7 @@ class BriefingIntelligence:
         previous_state: Optional[Dict[str, Any]] = None,
         newsletters: Optional[List[Dict[str, Any]]] = None,
         github_trending: Optional[List[Dict[str, Any]]] = None,
+        obsidian_context: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, str]:
         """
         Synthesize cross-section connections and generate editorial content.
@@ -1006,8 +1007,9 @@ class BriefingIntelligence:
             top_papers: Top-scored papers.
             emerging_themes: Emerging themes detected from today's content.
             previous_state: Previous briefing state for trend tracking.
-            newsletters: Newsletter items from Supabase.
-            github_trending: GitHub trending repos from Supabase.
+            newsletters: Newsletter items.
+            github_trending: GitHub trending repos.
+            obsidian_context: Cross-day context from Obsidian vault (themes, entities).
 
         Returns:
             Dictionary with key:
@@ -1103,6 +1105,21 @@ class BriefingIntelligence:
                     prev_parts.append("Multi-day trends: " + "; ".join(trend_lines))
             if len(prev_parts) > 1:
                 sections.append("\n".join(prev_parts))
+
+        if obsidian_context:
+            vault_parts = []
+            yt = obsidian_context.get("yesterday_themes", [])
+            if yt:
+                vault_parts.append(f"Yesterday's themes: {', '.join(yt)}")
+            et = obsidian_context.get("entity_timelines", {})
+            for name, dates in et.items():
+                if dates:
+                    vault_parts.append(f"{name} mentioned on: {', '.join(dates[-3:])}")
+            if vault_parts:
+                sections.append(
+                    "OBSIDIAN VAULT CONTEXT (cross-day continuity):\n"
+                    + "\n".join(f"- {p}" for p in vault_parts)
+                )
 
         if not sections:
             return {}

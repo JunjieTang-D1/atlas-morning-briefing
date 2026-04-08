@@ -680,6 +680,68 @@ class BriefingCoordinator:
         return markdown_content.rstrip() + section
 
     # ------------------------------------------------------------------
+    # Obsidian-based context (replaces file-based memory)
+    # ------------------------------------------------------------------
+
+    def _load_obsidian_context(self, date: datetime) -> Dict[str, Any]:
+        """Load cross-day context from Obsidian vault for synthesis enrichment.
+
+        Reads yesterday's briefing frontmatter and tracked entity pages to
+        provide narrative continuity. All reads are best-effort.
+        """
+        obsidian_config = self.config.get("obsidian", {})
+        if not obsidian_config.get("enabled", False):
+            return {}
+
+        api_url = obsidian_config.get("api_url", "http://localhost:27123")
+        api_key = os.environ.get("OBSIDIAN_API_KEY", "")
+        if not api_key:
+            return {}
+
+        try:
+            writer = ObsidianWriter(api_url, api_key, obsidian_config)
+        except Exception:
+            return {}
+
+        context: Dict[str, Any] = {}
+
+        # Read yesterday's briefing frontmatter
+        from datetime import timedelta
+        yesterday = date - timedelta(days=1)
+        folder = obsidian_config.get("briefing_folder", "Sources/Briefings")
+        yesterday_path = (
+            f"{folder}/{yesterday.strftime('%Y')}/{yesterday.strftime('%m')}/"
+            f"Personal-Briefing-{yesterday.strftime('%Y-%m-%d')}.md"
+        )
+        content = writer._get_note(yesterday_path)
+        if content:
+            fm = ObsidianWriter._extract_frontmatter(content)
+            context["yesterday_themes"] = fm.get("emerging-themes", [])
+            context["yesterday_top_papers"] = fm.get("top-papers", [])
+            context["yesterday_entities"] = fm.get("entity-mentions", [])
+
+        # Read tracked entity pages for timeline context
+        entity_context = {}
+        for entity in self.config.get("tracked_entities", [])[:5]:
+            name = entity.get("name", "")
+            if not name:
+                continue
+            vault_name = ObsidianWriter._to_vault_name(name)
+            entity_content = writer._get_note(f"Wiki/Entities/{vault_name}.md")
+            if entity_content:
+                # Extract last 3 timeline headings
+                headings = [
+                    line.strip("# ").strip()
+                    for line in entity_content.split("\n")
+                    if line.startswith("### 20")  # date headings
+                ]
+                entity_context[name] = headings[-3:]
+        if entity_context:
+            context["entity_timelines"] = entity_context
+
+        return context
+
+    # ------------------------------------------------------------------
     # Distribution & publishing
     # ------------------------------------------------------------------
 
@@ -983,12 +1045,16 @@ class BriefingCoordinator:
                     top_papers = self.intelligence.assess_reproduction_feasibility(top_papers)
                     top_papers = self._ensure_paper_summaries(top_papers[:3]) + top_papers[3:]
 
+                    # Load cross-day context from Obsidian vault
+                    obsidian_context = self._load_obsidian_context(now)
+
                     synthesis = self.intelligence.synthesize_briefing(
                         papers, blogs[:5], stocks, news[:5], top_papers[:3],
                         emerging_themes=emerging_themes,
                         previous_state=previous_state,
                         newsletters=newsletters,
                         github_trending=github_trending,
+                        obsidian_context=obsidian_context,
                     )
 
                     tracked_entities = self.config.get("tracked_entities", [])
