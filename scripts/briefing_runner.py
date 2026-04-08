@@ -35,7 +35,7 @@ from scripts.email_distributor import EmailDistributor
 from scripts.config_validator import validate_config, check_environment
 from scripts.llm_client import LLMClient
 from scripts.intelligence import BriefingIntelligence
-from scripts.newsletter_scanner import NewsletterScanner
+from scripts.gmail_scanner import GmailScanner
 from scripts.github_trending_scanner import GitHubTrendingScanner
 from opentelemetry import trace
 from scripts.tracing import setup_tracing, get_tracer
@@ -56,7 +56,7 @@ class BriefingRunner:
     # Default section order
     DEFAULT_SECTION_ORDER = ["stocks", "news", "community_picks", "newsletters", "top_papers", "blogs"]
 
-    def __init__(self, config: Dict[str, Any], dry_run: bool = False):
+    def __init__(self, config: Dict[str, Any], dry_run: bool = False, run_date: Optional[datetime] = None):
         """
         Initialize BriefingRunner.
 
@@ -66,6 +66,7 @@ class BriefingRunner:
         """
         self.config = config
         self.dry_run = dry_run
+        self._run_date = run_date
         self.errors = []
         self._briefing_title = self._format_filename(datetime.now())
         self.status = {
@@ -98,7 +99,7 @@ class BriefingRunner:
         setup_tracing(config)
         self._tracer = get_tracer()
 
-    def run_arxiv_scan(self, topics: Optional[List[str]] = None) -> List[Dict[str, Any]]:
+    def run_arxiv_scan(self, topics: Optional[List[str]] = None, ref_date: Optional[datetime] = None) -> List[Dict[str, Any]]:
         """Run arxiv paper scan."""
         try:
             logger.info("=== Scanning ArXiv Papers ===")
@@ -115,6 +116,7 @@ class BriefingRunner:
                 topics=topics,
                 days_back=days_back,
                 max_results=max_papers,
+                end_date=ref_date,
             )
             papers = scanner.scan_all_topics()
             self.status["papers_found"] = len(papers)
@@ -126,7 +128,7 @@ class BriefingRunner:
             self.errors.append(f"ArXiv scan: {e}")
             return []
 
-    def run_blog_scan(self) -> List[Dict[str, Any]]:
+    def run_blog_scan(self, ref_date: Optional[datetime] = None) -> List[Dict[str, Any]]:
         """Run blog feed scan."""
         try:
             logger.info("=== Scanning Blog Feeds ===")
@@ -142,6 +144,7 @@ class BriefingRunner:
                 feeds=feeds,
                 days_back=days_back,
                 max_items=max_blogs,
+                ref_date=ref_date,
             )
             articles = scanner.scan_all_feeds()
             self.status["blogs_found"] = len(articles)
@@ -222,16 +225,15 @@ class BriefingRunner:
             return []
 
     def run_newsletter_scan(self) -> List[Dict[str, Any]]:
-        """Run newsletter scan from Supabase."""
+        """Run newsletter scan from Gmail via IMAP."""
         try:
             ns_config = self.config.get("newsletter_source", {})
             if not ns_config.get("enabled", False):
                 return []
 
             logger.info("=== Scanning Newsletters ===")
-            self.newsletter_scanner = NewsletterScanner(
-                supabase_url=ns_config.get("supabase_url"),
-                supabase_key=ns_config.get("supabase_key"),
+            self.newsletter_scanner = GmailScanner(
+                source_label=ns_config.get("source_label", "INBOX"),
                 max_items=ns_config.get("max_items", 20),
             )
             items = self.newsletter_scanner.scan()
@@ -816,13 +818,6 @@ class BriefingRunner:
             elif relevance_reason:
                 md.append(f"{relevance_reason}\n\n")
 
-            # Show reproduction feasibility badge
-            if repro_total is not None:
-                badge = "✅" if repro_total >= 18 else "🟡" if repro_total >= 12 else "🔴"
-                md.append(f"**Repro: {badge} {repro_total}/25** ({difficulty})")
-                if repro_verdict:
-                    md.append(f" — {repro_verdict}")
-                md.append("\n")
 
             md.append("\n\n")
         return "".join(md)
@@ -1103,8 +1098,10 @@ class BriefingRunner:
         """
         start_time = time.time()
         logger.info("=== Starting Morning Briefing ===")
-        now = datetime.now()
+        now = self._run_date or datetime.now()
         today_str = now.strftime("%Y-%m-%d")
+        if self._run_date:
+            logger.info(f"Rerun mode: generating briefing for {today_str}")
 
         with self._tracer.start_as_current_span("personal.briefing.run") as root_span:
             root_span.set_attribute("briefing.date", today_str)
@@ -1124,8 +1121,8 @@ class BriefingRunner:
             with self._tracer.start_as_current_span("personal.fetch"):
                 logger.info("=== Parallel data fetch (papers/blogs/stocks/newsletters) ===")
                 with ThreadPoolExecutor(max_workers=5) as pool:
-                    fut_papers = pool.submit(self.run_arxiv_scan, topics)
-                    fut_blogs = pool.submit(self.run_blog_scan)
+                    fut_papers = pool.submit(self.run_arxiv_scan, topics, now)
+                    fut_blogs = pool.submit(self.run_blog_scan, now)
                     fut_stocks = pool.submit(self.run_stock_fetch)
                     fut_newsletters = pool.submit(self.run_newsletter_scan)
                     fut_github = pool.submit(self.run_github_trending_scan)
@@ -1374,6 +1371,9 @@ class BriefingRunner:
                         )
                         self.status["podcast_url"] = podcast_url
                         logger.info(f"Podcast URL injected into briefing: {podcast_url}")
+                    elif self.podcast_generator.enabled:
+                        self.status["podcast_error"] = "failed — check logs (possible auth expiry)"
+                        self.errors.append("Podcast generation failed — see ERROR logs for details")
 
                 # --- Save markdown ---
                 md_path = f"{filename}.md"
@@ -1414,9 +1414,9 @@ class BriefingRunner:
             podcast_url=podcast_url,
         )
 
-        # --- Mark newsletters as digested in Supabase ---
+        # --- Mark newsletters as read in Gmail ---
         ns_config = self.config.get("newsletter_source", {})
-        if self.newsletter_scanner and ns_config.get("mark_digested", True):
+        if self.newsletter_scanner and ns_config.get("mark_read", True):
             self.newsletter_scanner.mark_digested()
 
         # --- Save state for cross-day tracking ---
@@ -1464,6 +1464,16 @@ def main() -> int:
         choices=["DEBUG", "INFO", "WARNING", "ERROR"],
         help="Logging level",
     )
+    parser.add_argument(
+        "--date",
+        type=str,
+        default=None,
+        metavar="YYYY-MM-DD",
+        help=(
+            "Generate the briefing for a specific past date instead of today. "
+            "ArXiv and blog searches will use a window of [DATE - arxiv_days_back, DATE]."
+        ),
+    )
 
     args = parser.parse_args()
 
@@ -1482,8 +1492,17 @@ def main() -> int:
     # Check environment
     check_environment(config, dry_run=args.dry_run)
 
+    # Parse optional date override
+    run_date = None
+    if args.date:
+        try:
+            run_date = datetime.strptime(args.date, "%Y-%m-%d")
+        except ValueError:
+            logger.error(f"Invalid --date format '{args.date}': expected YYYY-MM-DD")
+            return 2
+
     # Run briefing
-    runner = BriefingRunner(config=config, dry_run=args.dry_run)
+    runner = BriefingRunner(config=config, dry_run=args.dry_run, run_date=run_date)
     return runner.run()
 
 

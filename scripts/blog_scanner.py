@@ -12,7 +12,7 @@ import logging
 import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 import feedparser
 
@@ -26,7 +26,13 @@ logger = logging.getLogger(__name__)
 class BlogScanner:
     """Scans RSS feeds for new blog posts."""
 
-    def __init__(self, feeds: List[Dict[str, str]], days_back: int = 7, max_items: int = 10):
+    def __init__(
+        self,
+        feeds: List[Dict[str, str]],
+        days_back: int = 7,
+        max_items: int = 10,
+        ref_date: Optional[datetime] = None,
+    ):
         """
         Initialize BlogScanner.
 
@@ -34,10 +40,13 @@ class BlogScanner:
             feeds: List of feed dictionaries with 'name' and 'url'
             days_back: Number of days to look back
             max_items: Maximum number of items per feed
+            ref_date: Reference point for the look-back window (defaults to
+                now). Pass a past datetime to re-generate a historical briefing.
         """
         self.feeds = feeds
         self.days_back = days_back
         self.max_items = max_items
+        self.ref_date = ref_date
 
     def scan_feed(self, feed_name: str, feed_url: str) -> List[Dict[str, Any]]:
         """
@@ -59,7 +68,12 @@ class BlogScanner:
                 logger.warning(f"Feed parsing issue for {feed_name}: {feed.bozo_exception}")
 
             # Calculate cutoff date
-            cutoff_date = datetime.now(timezone.utc) - timedelta(days=self.days_back)
+            ref = (
+                self.ref_date.replace(tzinfo=timezone.utc)
+                if self.ref_date and self.ref_date.tzinfo is None
+                else self.ref_date or datetime.now(timezone.utc)
+            )
+            cutoff_date = ref - timedelta(days=self.days_back)
 
             for entry in feed.entries[:self.max_items]:
                 # Parse published date

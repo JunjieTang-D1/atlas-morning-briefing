@@ -12,7 +12,7 @@ import logging
 import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 import requests
 
@@ -36,7 +36,13 @@ class ArxivScanner:
 
     ARXIV_API_URL = "https://export.arxiv.org/api/query"
 
-    def __init__(self, topics: List[str], days_back: int = 7, max_results: int = 20):
+    def __init__(
+        self,
+        topics: List[str],
+        days_back: int = 7,
+        max_results: int = 20,
+        end_date: Optional[datetime] = None,
+    ):
         """
         Initialize ArxivScanner.
 
@@ -44,10 +50,13 @@ class ArxivScanner:
             topics: List of topics to search for
             days_back: Number of days to look back
             max_results: Maximum number of results per topic
+            end_date: End of the search window (defaults to now). Pass a past
+                datetime to re-generate a briefing for a historical date.
         """
         self.topics = topics
         self.days_back = days_back
         self.max_results = max_results
+        self.end_date = end_date
 
     def search_topic(self, topic: str) -> List[Dict[str, Any]]:
         """
@@ -61,7 +70,11 @@ class ArxivScanner:
         """
         try:
             # Calculate date range
-            end_date = datetime.now(timezone.utc)
+            end_date = (
+                self.end_date.replace(tzinfo=timezone.utc)
+                if self.end_date and self.end_date.tzinfo is None
+                else self.end_date or datetime.now(timezone.utc)
+            )
             start_date = end_date - timedelta(days=self.days_back)
 
             # Build query

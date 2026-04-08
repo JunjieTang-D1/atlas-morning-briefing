@@ -133,6 +133,25 @@ class PodcastGenerator:
             return None
         return asyncio.run(self._generate_async(briefing_markdown, date, source_urls or []))
 
+    @staticmethod
+    def _is_auth_error(exc: BaseException) -> bool:
+        """Return True if the exception looks like an expired/invalid session."""
+        msg = str(exc).lower()
+        auth_signals = (
+            "401", "403", "unauthorized", "forbidden",
+            "unauthenticated", "not authenticated",
+            "session", "login", "expired", "invalid credentials",
+            "access denied", "sign in", "google account",
+        )
+        # Also check HTTP status codes surfaced by httpx / aiohttp / requests
+        for attr in ("status_code", "status", "response"):
+            val = getattr(exc, attr, None)
+            if val is not None:
+                code = getattr(val, "status_code", None) or (val if isinstance(val, int) else None)
+                if code in (401, 403):
+                    return True
+        return any(sig in msg for sig in auth_signals)
+
     async def _generate_async(
         self,
         briefing_markdown: str,
@@ -206,7 +225,17 @@ class PodcastGenerator:
                     return share_url
 
                 except Exception as e:
-                    logger.warning(f"NotebookLM podcast setup failed: {e}")
+                    if self._is_auth_error(e):
+                        logger.error(
+                            "NotebookLM auth error — Google session has expired or been revoked. "
+                            "HTTP %s. "
+                            "Re-run `notebooklm login`, base64-encode the new storage_state.json, "
+                            "and update NOTEBOOKLM_STORAGE_STATE_B64 in Infisical "
+                            "(/providers/ai/google). Podcast skipped for today.",
+                            getattr(getattr(e, "response", None), "status_code", "4xx"),
+                        )
+                    else:
+                        logger.warning(f"NotebookLM podcast setup failed: {e}")
                     # Clean up notebook only if we never obtained a usable URL
                     if notebook_id:
                         try:
@@ -217,7 +246,17 @@ class PodcastGenerator:
                     return None
 
         except Exception as e:
-            logger.warning(f"NotebookLM client init failed: {e}")
+            if self._is_auth_error(e):
+                logger.error(
+                    "NotebookLM auth error — Google session has expired or been revoked. "
+                    "HTTP %s. "
+                    "Re-run `notebooklm login`, base64-encode the new storage_state.json, "
+                    "and update NOTEBOOKLM_STORAGE_STATE_B64 in Infisical "
+                    "(/providers/ai/google). Podcast skipped for today.",
+                    getattr(getattr(e, "response", None), "status_code", "4xx"),
+                )
+            else:
+                logger.warning(f"NotebookLM client init failed: {e}")
             return None
         finally:
             if tmp_storage_path and os.path.exists(tmp_storage_path):
