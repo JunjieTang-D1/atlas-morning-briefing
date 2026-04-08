@@ -11,7 +11,8 @@ Self-contained worker that does NOT delegate back to coordinator.
 import logging
 import sys
 from pathlib import Path
-from typing import Any, Dict
+from datetime import datetime
+from typing import Any, Dict, Optional
 
 # Ensure scripts directory is on path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
@@ -28,14 +29,15 @@ logger = logging.getLogger(__name__)
 class BlogsWorker(BaseWorker):
     """Fetches and enriches blog posts independently."""
 
-    def __init__(self, config: Dict[str, Any]):
+    def __init__(self, config: Dict[str, Any], ref_date: Optional[datetime] = None):
         """
         Initialize BlogsWorker.
 
         Args:
             config: Full configuration dictionary
+            ref_date: Reference date for historical reruns
         """
-        super().__init__(config, "blogs_worker")
+        super().__init__(config, "blogs_worker", ref_date=ref_date)
         self.feeds = config.get("blog_feeds", [])
         self.days_back = 7
         self.max_blogs = config.get("max_blogs", 12)
@@ -57,7 +59,8 @@ class BlogsWorker(BaseWorker):
             scanner = BlogScanner(
                 feeds=self.feeds,
                 days_back=self.days_back,
-                max_items=10
+                max_items=10,
+                ref_date=self.ref_date,
             )
             blogs = scanner.scan_all_feeds()
             items_found = len(blogs)

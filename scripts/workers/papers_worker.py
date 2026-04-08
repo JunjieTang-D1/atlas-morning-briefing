@@ -11,7 +11,8 @@ Self-contained worker that does NOT delegate back to coordinator.
 import logging
 import sys
 from pathlib import Path
-from typing import Any, Dict
+from datetime import datetime
+from typing import Any, Dict, Optional
 
 # Ensure scripts directory is on path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
@@ -29,14 +30,15 @@ logger = logging.getLogger(__name__)
 class PapersWorker(BaseWorker):
     """Fetches and enriches ArXiv papers independently."""
 
-    def __init__(self, config: Dict[str, Any]):
+    def __init__(self, config: Dict[str, Any], ref_date: Optional[datetime] = None):
         """
         Initialize PapersWorker.
 
         Args:
             config: Full configuration dictionary
+            ref_date: Reference date for historical reruns
         """
-        super().__init__(config, "papers_worker")
+        super().__init__(config, "papers_worker", ref_date=ref_date)
         self.topics = config.get("arxiv_topics", [])
         self.days_back = config.get("arxiv_days_back", 3)
         self.max_papers = config.get("max_papers", 30)
@@ -58,7 +60,8 @@ class PapersWorker(BaseWorker):
             scanner = ArxivScanner(
                 topics=self.topics,
                 days_back=self.days_back,
-                max_results=self.max_papers
+                max_results=self.max_papers,
+                end_date=self.ref_date,
             )
             papers = scanner.scan_all_topics()
             items_found = len(papers)

@@ -11,7 +11,8 @@ Self-contained worker that does NOT delegate back to coordinator.
 import logging
 import sys
 from pathlib import Path
-from typing import Any, Dict
+from datetime import datetime
+from typing import Any, Dict, Optional
 
 # Ensure scripts directory is on path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
@@ -29,14 +30,15 @@ logger = logging.getLogger(__name__)
 class NewsMarketWorker(BaseWorker):
     """Fetches and enriches news + stock data independently."""
 
-    def __init__(self, config: Dict[str, Any]):
+    def __init__(self, config: Dict[str, Any], ref_date: Optional[datetime] = None):
         """
         Initialize NewsMarketWorker.
 
         Args:
             config: Full configuration dictionary
+            ref_date: Reference date for historical reruns (unused for news)
         """
-        super().__init__(config, "news_market_worker")
+        super().__init__(config, "news_market_worker", ref_date=ref_date)
         self.news_queries = config.get("news_queries", [])
         self.stocks = config.get("stocks", [])
         self.max_news = config.get("max_news", 15)

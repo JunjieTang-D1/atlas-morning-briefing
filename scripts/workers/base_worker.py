@@ -7,22 +7,30 @@ Each worker is self-contained and reports findings in a structured format.
 
 import time
 from abc import ABC, abstractmethod
-from typing import Any, Dict
+from datetime import datetime
+from typing import Any, Dict, Optional
 
 
 class BaseWorker(ABC):
     """Base class for all workers in the multi-agent architecture."""
 
-    def __init__(self, config: Dict[str, Any], worker_name: str):
+    def __init__(
+        self,
+        config: Dict[str, Any],
+        worker_name: str,
+        ref_date: Optional[datetime] = None,
+    ):
         """
         Initialize worker.
 
         Args:
             config: Full configuration dictionary
             worker_name: Name of this worker (for logging/reporting)
+            ref_date: Reference date for historical reruns (None = today)
         """
         self.config = config
         self.worker_name = worker_name
+        self.ref_date = ref_date
         self.start_time = None
         self.end_time = None
 

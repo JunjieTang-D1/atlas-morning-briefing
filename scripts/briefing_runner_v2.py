@@ -24,7 +24,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 import yaml
 
@@ -58,16 +58,23 @@ class BriefingCoordinator:
     5. Updates memory after briefing
     """
 
-    def __init__(self, config: Dict[str, Any], dry_run: bool = False):
+    def __init__(
+        self,
+        config: Dict[str, Any],
+        dry_run: bool = False,
+        run_date: Optional[datetime] = None,
+    ):
         """
         Initialize BriefingCoordinator.
 
         Args:
             config: Configuration dictionary
             dry_run: If True, skip email distribution
+            run_date: Optional date for historical reruns (None = today)
         """
         self.config = config
         self.dry_run = dry_run
+        self.run_date = run_date
         self.llm = LLMClient(config.get("llm", {}))
 
         # Initialize memory system
@@ -142,9 +149,9 @@ class BriefingCoordinator:
             List of finding dictionaries from all workers
         """
         workers = [
-            PapersWorker(self.config),
-            BlogsWorker(self.config),
-            NewsMarketWorker(self.config)
+            PapersWorker(self.config, ref_date=self.run_date),
+            BlogsWorker(self.config, ref_date=self.run_date),
+            NewsMarketWorker(self.config, ref_date=self.run_date),
         ]
 
         findings = []
@@ -455,8 +462,8 @@ class BriefingCoordinator:
 
     def _get_output_filename(self) -> str:
         """Get output filename based on config pattern."""
-        pattern = self.config.get("file_naming", "Atlas-Briefing-{yyyy}.{mm}.{dd}")
-        now = datetime.now(timezone.utc)
+        pattern = self.config.get("file_naming", "Personal-Briefing-{yyyy}.{mm}.{dd}")
+        now = self.run_date or datetime.now(timezone.utc)
         return pattern.format(yyyy=now.year, mm=f"{now.month:02d}", dd=f"{now.day:02d}")
 
     def _load_memory(self) -> Dict[str, Any]:
@@ -497,6 +504,7 @@ def main():
     parser = argparse.ArgumentParser(description="Morning Briefing v0.2 (Coordinator + Workers)")
     parser.add_argument("--config", required=True, help="Path to config YAML")
     parser.add_argument("--dry-run", action="store_true", help="Skip email distribution")
+    parser.add_argument("--date", type=str, help="Rerun for a past date (YYYY-MM-DD)")
     args = parser.parse_args()
 
     # Load and validate config
@@ -506,8 +514,17 @@ def main():
     validate_config(config)
     check_environment(config)
 
+    # Parse optional --date
+    run_date = None
+    if args.date:
+        try:
+            run_date = datetime.strptime(args.date, "%Y-%m-%d")
+        except ValueError:
+            logger.error(f"Invalid --date format '{args.date}': expected YYYY-MM-DD")
+            sys.exit(2)
+
     # Run coordinator
-    coordinator = BriefingCoordinator(config, dry_run=args.dry_run)
+    coordinator = BriefingCoordinator(config, dry_run=args.dry_run, run_date=run_date)
     exit_code = coordinator.run()
     sys.exit(exit_code)
 
