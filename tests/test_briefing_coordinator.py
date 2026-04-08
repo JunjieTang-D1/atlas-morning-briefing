@@ -3,7 +3,7 @@
 from datetime import datetime
 from unittest.mock import patch
 
-from scripts.briefing_runner_v2 import BriefingCoordinator
+from scripts.briefing_runner import BriefingCoordinator
 
 
 MINIMAL_CONFIG = {

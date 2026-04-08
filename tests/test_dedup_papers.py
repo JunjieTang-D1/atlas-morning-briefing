@@ -2,7 +2,7 @@
 """Tests for paper deduplication in briefing_runner."""
 
 import pytest
-from scripts.briefing_runner import BriefingRunner
+from scripts.briefing_runner import BriefingCoordinator
 
 
 @pytest.fixture
@@ -20,8 +20,10 @@ def runner():
         "file_naming": "Personal-Briefing-{yyyy}.{mm}.{dd}",
         "pdf": {"font_size": 10, "line_spacing": 1.5},
         "llm": {"enabled": False},
+        "podcast": {"enabled": False},
+        "obsidian": {"enabled": False},
     }
-    return BriefingRunner(config=config, dry_run=True)
+    return BriefingCoordinator(config=config, dry_run=True)
 
 
 class TestDeduplicateSimilarPapers:
