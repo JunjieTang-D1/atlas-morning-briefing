@@ -118,7 +118,7 @@ class BriefingCoordinator:
 
         findings: List[Dict[str, Any]] = []
         with ThreadPoolExecutor(max_workers=len(workers)) as executor:
-            futures = {executor.submit(w.execute): w for w in workers}
+            futures = {executor.submit(w.run): w for w in workers}
             for future in as_completed(futures):
                 worker = futures[future]
                 try:

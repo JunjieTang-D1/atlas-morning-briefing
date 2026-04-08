@@ -10,6 +10,10 @@ from abc import ABC, abstractmethod
 from datetime import datetime
 from typing import Any, Dict, Optional
 
+from opentelemetry import trace
+
+_worker_tracer = trace.get_tracer("personal.worker")
+
 
 class BaseWorker(ABC):
     """Base class for all workers in the multi-agent architecture."""
@@ -34,26 +38,25 @@ class BaseWorker(ABC):
         self.start_time = None
         self.end_time = None
 
+    def run(self) -> Dict[str, Any]:
+        """Execute the worker inside an OTel span. Coordinator calls this."""
+        with _worker_tracer.start_as_current_span(
+            f"personal.worker.{self.worker_name}"
+        ) as span:
+            finding = self.execute()
+            span.set_attribute("worker.status", finding.get("status", ""))
+            span.set_attribute("worker.items_found", finding["metadata"].get("items_found", 0))
+            if finding.get("error"):
+                span.set_status(trace.StatusCode.ERROR, finding["error"])
+            return finding
+
     @abstractmethod
     def execute(self) -> Dict[str, Any]:
         """
-        Execute the worker's task.
+        Execute the worker's task. Subclasses implement this.
 
         Returns:
-            Dictionary with findings in this format:
-            {
-                "worker": str,           # Worker name
-                "status": str,           # "success" or "error"
-                "items": List[Dict],     # Found items (papers/blogs/news/stocks)
-                "metadata": {
-                    "processing_time": float,  # Seconds
-                    "token_count": int,        # LLM tokens used
-                    "items_found": int,        # Raw items before filtering
-                    "items_kept": int          # Items after enrichment/filtering
-                },
-                "synthesis": str,        # Worker's own summary of findings
-                "error": str             # Error message if status=="error"
-            }
+            Standardized finding dictionary.
         """
         pass
 
