@@ -17,7 +17,7 @@ from typing import Any, Dict
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
 from scripts.blog_scanner import BlogScanner
-from scripts.bedrock_client import BedrockClient
+from scripts.llm_client import LLMClient
 from scripts.intelligence import BriefingIntelligence
 from scripts.workers.base_worker import BaseWorker
 
@@ -72,8 +72,8 @@ class BlogsWorker(BaseWorker):
                 )
 
             # Step 2: Initialize intelligence layer for enrichment
-            bedrock = BedrockClient(self.config)
-            intelligence = BriefingIntelligence(bedrock, self.config)
+            llm = LLMClient(self.config.get("llm", {}))
+            intelligence = BriefingIntelligence(llm, self.config)
 
             if not intelligence.available:
                 logger.warning(f"[{self.worker_name}] Intelligence layer unavailable, returning raw blogs")

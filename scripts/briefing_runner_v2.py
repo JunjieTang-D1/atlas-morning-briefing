@@ -34,7 +34,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from scripts.workers.papers_worker import PapersWorker
 from scripts.workers.blogs_worker import BlogsWorker
 from scripts.workers.news_market_worker import NewsMarketWorker
-from scripts.bedrock_client import BedrockClient
+from scripts.llm_client import LLMClient
 from scripts.pdf_generator import PDFGenerator
 from scripts.email_distributor import EmailDistributor
 from scripts.config_validator import validate_config, check_environment
@@ -68,7 +68,7 @@ class BriefingCoordinator:
         """
         self.config = config
         self.dry_run = dry_run
-        self.bedrock = BedrockClient(config)
+        self.llm = LLMClient(config.get("llm", {}))
 
         # Initialize memory system
         self.memory_dir = MEMORY_DIR
@@ -258,7 +258,7 @@ class BriefingCoordinator:
         Returns:
             List of emerging theme strings
         """
-        if not self.bedrock.available:
+        if not self.llm.available:
             return []
 
         # Build prompt with key items from each source
@@ -278,7 +278,9 @@ class BriefingCoordinator:
             prompt += f"- {n.get('title', 'Unknown')}\n"
         prompt += "\nReturn ONLY a comma-separated list of 2-3 themes (no explanation)."
 
-        response = self.bedrock.invoke(prompt, tier="light")
+        response = self.llm.invoke(prompt, tier="light")
+        if not response:
+            return []
         themes = [t.strip() for t in response.split(",")]
         return themes[:3]
 
@@ -299,7 +301,7 @@ class BriefingCoordinator:
         Returns:
             Executive summary string
         """
-        if not self.bedrock.available:
+        if not self.llm.available:
             return "Executive summary unavailable (LLM offline)"
 
         prompt = "You are writing the executive summary for today's morning briefing.\n\n"
@@ -316,7 +318,7 @@ class BriefingCoordinator:
 
         prompt += "\nWrite a 2-3 sentence executive summary highlighting the most important insights. Be specific."
 
-        return self.bedrock.invoke(prompt, tier="medium")
+        return self.llm.invoke(prompt, tier="medium") or "Executive summary unavailable"
 
     def _analyze_market_trend(self, stocks: list, news: list) -> str:
         """
@@ -329,7 +331,7 @@ class BriefingCoordinator:
         Returns:
             Market trend analysis string
         """
-        if not stocks or not self.bedrock.available:
+        if not stocks or not self.llm.available:
             return ""
 
         gainers = [s for s in stocks if s.get("change_pct", 0) > 0]
@@ -347,7 +349,7 @@ class BriefingCoordinator:
 
         prompt += "\nProvide a 1-2 sentence market trend analysis."
 
-        return self.bedrock.invoke(prompt, tier="light")
+        return self.llm.invoke(prompt, tier="light") or ""
 
     def _generate_briefing(
         self,

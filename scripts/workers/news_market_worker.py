@@ -18,7 +18,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
 from scripts.news_aggregator import NewsAggregator
 from scripts.stock_fetcher import StockFetcher
-from scripts.bedrock_client import BedrockClient
+from scripts.llm_client import LLMClient
 from scripts.intelligence import BriefingIntelligence
 from scripts.workers.base_worker import BaseWorker
 
@@ -67,8 +67,8 @@ class NewsMarketWorker(BaseWorker):
             logger.info(f"[{self.worker_name}] Fetched {stocks_found} stock prices")
 
             # Step 3: Initialize intelligence layer for enrichment
-            bedrock = BedrockClient(self.config)
-            intelligence = BriefingIntelligence(bedrock, self.config)
+            llm = LLMClient(self.config.get("llm", {}))
+            intelligence = BriefingIntelligence(llm, self.config)
 
             if not intelligence.available:
                 logger.warning(f"[{self.worker_name}] Intelligence layer unavailable, returning raw data")
