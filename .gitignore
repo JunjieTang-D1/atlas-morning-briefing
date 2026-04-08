@@ -12,6 +12,7 @@ __pycache__/
 .env
 config.yaml
 config.yaml.local
+config-local.yaml
 
 # Build artifacts
 build/

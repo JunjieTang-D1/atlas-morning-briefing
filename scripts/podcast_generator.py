@@ -187,7 +187,10 @@ class PodcastGenerator:
 
                     # 2. Make public — share_url is now fixed and embeddable
                     share_status = await client.sharing.set_public(notebook_id, True)
-                    share_url = share_status.share_url
+                    share_url = getattr(share_status, "share_url", None)
+                    if not share_url:
+                        # Fallback: construct URL from notebook ID
+                        share_url = f"https://notebooklm.google.com/notebook/{notebook_id}"
                     logger.info(f"NotebookLM share URL: {share_url}")
 
                     # 3. Add briefing markdown as primary text source

@@ -8,6 +8,7 @@ them as briefing source items. Uses GMAIL_USER + GMAIL_APP_PASSWORD credentials
 """
 
 import email
+import email.message
 import html
 import imaplib
 import logging

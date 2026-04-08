@@ -235,10 +235,12 @@ def check_environment(config: Dict[str, Any], dry_run: bool = False) -> List[str
     # Podcast requires NotebookLM storage state
     podcast = config.get("podcast", {})
     if podcast.get("enabled", False):
+        from pathlib import Path
         has_path = (
             podcast.get("storage_state_path")
             or os.environ.get("NOTEBOOKLM_STORAGE_STATE_PATH")
             or os.environ.get("NOTEBOOKLM_STORAGE_STATE_B64")
+            or Path("~/.notebooklm/storage_state.json").expanduser().exists()
         )
         if not has_path:
             warnings.append(

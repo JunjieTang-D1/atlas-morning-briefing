@@ -57,13 +57,23 @@ class NewsMarketWorker(BaseWorker):
             logger.info(f"[{self.worker_name}] Starting news and market data fetch")
 
             # Step 1: Fetch news articles
-            news_aggregator = NewsAggregator(self.news_queries, self.config)
+            import os
+            brave_key = os.environ.get("BRAVE_API_KEY", "")
+            news_aggregator = NewsAggregator(
+                api_key=brave_key,
+                queries=self.news_queries,
+                max_results=self.max_news,
+            )
             news = news_aggregator.aggregate_all_queries()
             news_found = len(news)
             logger.info(f"[{self.worker_name}] Fetched {news_found} news articles")
 
             # Step 2: Fetch stock data
-            stock_fetcher = StockFetcher(self.stocks, self.config)
+            finnhub_key = os.environ.get("FINNHUB_API_KEY", "")
+            stock_fetcher = StockFetcher(
+                api_key=finnhub_key,
+                symbols=self.stocks,
+            )
             stocks = stock_fetcher.fetch_all_stocks()
             stocks_found = len(stocks)
             logger.info(f"[{self.worker_name}] Fetched {stocks_found} stock prices")
