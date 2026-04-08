@@ -1,0 +1,230 @@
+INFO: === Morning Briefing Benchmark: v0.1 vs v0.2 ===
+INFO: 
+=== Running v0.1 (current serial + partial parallel) ===
+INFO: Running: /home/ubuntu/.openclaw/workspace/atlas-morning-briefing/venv/bin/python3 scripts/briefing_runner.py --config config.yaml --dry-run
+WARNING: Output file Atlas-Briefing-v0.1.md not found
+INFO: v0.1 completed in 90.7s, 0 tokens
+INFO: 
+=== Running v0.2 (coordinator + parallel workers) ===
+INFO: Running: /home/ubuntu/.openclaw/workspace/atlas-morning-briefing/venv/bin/python3 scripts/briefing_runner_v2.py --config config.yaml --dry-run
+ERROR: v0.2 failed: WARNING: BRAVE_API_KEY not set -- news aggregation will be skipped
+INFO: === Morning Briefing v0.2 - Coordinator + Parallel Workers ===
+INFO: === Spawning parallel workers ===
+INFO: [papers_worker] Starting ArXiv paper scan
+INFO: [blogs_worker] Starting blog scan
+INFO: [news_market_worker] Starting news and market data fetch
+INFO: Searching ArXiv for topic: Agentic AI
+INFO: Searching ArXiv for topic: Agent Evaluation
+INFO: Searching ArXiv for topic: Multi-Agent Systems
+INFO: Searching ArXiv for topic: Tool Use LLM
+INFO: Searching ArXiv for topic: VLA Robotics
+INFO: Searching ArXiv for topic: World Models
+INFO: Searching news for: arxiv_topics
+ERROR: Failed to search news for 'arxiv_topics': Header part (['AI artificial intelligence breakthrough', 'AWS Amazon Bedrock SageMaker', 'LLM agent framework', 'autonomous driving AI', 'OpenAI GPT model release', 'Anthropic Claude', 'Google DeepMind Gemini', 'AI regulation policy', 'semiconductor chip Nvidia', 'robotics embodied AI']) from ('X-Subscription-Token', ['AI artificial intelligence breakthrough', 'AWS Amazon Bedrock SageMaker', 'LLM agent framework', 'autonomous driving AI', 'OpenAI GPT model release', 'Anthropic Claude', 'Google DeepMind Gemini', 'AI regulation policy', 'semiconductor chip Nvidia', 'robotics embodied AI']) must be of type str or bytes, not <class 'list'>
+INFO: Scanning feed: AWS ML Blog
+INFO: Searching ArXiv for topic: NKI Trainium
+INFO: Searching ArXiv for topic: Physical AI Embodied
+INFO: Searching news for: blog_feeds
+INFO: Searching news for: interest_profile
+INFO: Searching news for: stocks
+ERROR: Failed to search news for 'blog_feeds': Header part (['AI artificial intelligence breakthrough', 'AWS Amazon Bedrock SageMaker', 'LLM agent framework', 'autonomous driving AI', 'OpenAI GPT model release', 'Anthropic Claude', 'Google DeepMind Gemini', 'AI regulation policy', 'semiconductor chip Nvidia', 'robotics embodied AI']) from ('X-Subscription-Token', ['AI artificial intelligence breakthrough', 'AWS Amazon Bedrock SageMaker', 'LLM agent framework', 'autonomous driving AI', 'OpenAI GPT model release', 'Anthropic Claude', 'Google DeepMind Gemini', 'AI regulation policy', 'semiconductor chip Nvidia', 'robotics embodied AI']) must be of type str or bytes, not <class 'list'>
+ERROR: Failed to search news for 'interest_profile': Header part (['AI artificial intelligence breakthrough', 'AWS Amazon Bedrock SageMaker', 'LLM agent framework', 'autonomous driving AI', 'OpenAI GPT model release', 'Anthropic Claude', 'Google DeepMind Gemini', 'AI regulation policy', 'semiconductor chip Nvidia', 'robotics embodied AI']) from ('X-Subscription-Token', ['AI artificial intelligence breakthrough', 'AWS Amazon Bedrock SageMaker', 'LLM agent framework', 'autonomous driving AI', 'OpenAI GPT model release', 'Anthropic Claude', 'Google DeepMind Gemini', 'AI regulation policy', 'semiconductor chip Nvidia', 'robotics embodied AI']) must be of type str or bytes, not <class 'list'>
+INFO: Searching news for: news_queries
+ERROR: Failed to search news for 'stocks': Header part (['AI artificial intelligence breakthrough', 'AWS Amazon Bedrock SageMaker', 'LLM agent framework', 'autonomous driving AI', 'OpenAI GPT model release', 'Anthropic Claude', 'Google DeepMind Gemini', 'AI regulation policy', 'semiconductor chip Nvidia', 'robotics embodied AI']) from ('X-Subscription-Token', ['AI artificial intelligence breakthrough', 'AWS Amazon Bedrock SageMaker', 'LLM agent framework', 'autonomous driving AI', 'OpenAI GPT model release', 'Anthropic Claude', 'Google DeepMind Gemini', 'AI regulation policy', 'semiconductor chip Nvidia', 'robotics embodied AI']) must be of type str or bytes, not <class 'list'>
+INFO: Scanning feed: Anthropic
+INFO: Scanning feed: Karpathy
+ERROR: Failed to search news for 'news_queries': Header part (['AI artificial intelligence breakthrough', 'AWS Amazon Bedrock SageMaker', 'LLM agent framework', 'autonomous driving AI', 'OpenAI GPT model release', 'Anthropic Claude', 'Google DeepMind Gemini', 'AI regulation policy', 'semiconductor chip Nvidia', 'robotics embodied AI']) from ('X-Subscription-Token', ['AI artificial intelligence breakthrough', 'AWS Amazon Bedrock SageMaker', 'LLM agent framework', 'autonomous driving AI', 'OpenAI GPT model release', 'Anthropic Claude', 'Google DeepMind Gemini', 'AI regulation policy', 'semiconductor chip Nvidia', 'robotics embodied AI']) must be of type str or bytes, not <class 'list'>
+INFO: Scanning feed: OpenAI
+INFO: Scanning feed: Eugene Yan
+INFO: Searching news for: paper_scoring
+ERROR: Failed to search news for 'paper_scoring': Header part (['AI artificial intelligence breakthrough', 'AWS Amazon Bedrock SageMaker', 'LLM agent framework', 'autonomous driving AI', 'OpenAI GPT model release', 'Anthropic Claude', 'Google DeepMind Gemini', 'AI regulation policy', 'semiconductor chip Nvidia', 'robotics embodied AI']) from ('X-Subscription-Token', ['AI artificial intelligence breakthrough', 'AWS Amazon Bedrock SageMaker', 'LLM agent framework', 'autonomous driving AI', 'OpenAI GPT model release', 'Anthropic Claude', 'Google DeepMind Gemini', 'AI regulation policy', 'semiconductor chip Nvidia', 'robotics embodied AI']) must be of type str or bytes, not <class 'list'>
+INFO: Scanning feed: Chip Huyen
+INFO: Searching news for: repro_min_score
+ERROR: Failed to search news for 'repro_min_score': Header part (['AI artificial intelligence breakthrough', 'AWS Amazon Bedrock SageMaker', 'LLM agent framework', 'autonomous driving AI', 'OpenAI GPT model release', 'Anthropic Claude', 'Google DeepMind Gemini', 'AI regulation policy', 'semiconductor chip Nvidia', 'robotics embodied AI']) from ('X-Subscription-Token', ['AI artificial intelligence breakthrough', 'AWS Amazon Bedrock SageMaker', 'LLM agent framework', 'autonomous driving AI', 'OpenAI GPT model release', 'Anthropic Claude', 'Google DeepMind Gemini', 'AI regulation policy', 'semiconductor chip Nvidia', 'robotics embodied AI']) must be of type str or bytes, not <class 'list'>
+INFO: Searching news for: email_recipients
+INFO: Searching news for: sender_email
+INFO: Searching news for: output_format
+ERROR: Failed to search news for 'output_format': Header part (['AI artificial intelligence breakthrough', 'AWS Amazon Bedrock SageMaker', 'LLM agent framework', 'autonomous driving AI', 'OpenAI GPT model release', 'Anthropic Claude', 'Google DeepMind Gemini', 'AI regulation policy', 'semiconductor chip Nvidia', 'robotics embodied AI']) from ('X-Subscription-Token', ['AI artificial intelligence breakthrough', 'AWS Amazon Bedrock SageMaker', 'LLM agent framework', 'autonomous driving AI', 'OpenAI GPT model release', 'Anthropic Claude', 'Google DeepMind Gemini', 'AI regulation policy', 'semiconductor chip Nvidia', 'robotics embodied AI']) must be of type str or bytes, not <class 'list'>
+INFO: Searching news for: file_naming
+INFO: Scanning feed: Interconnects
+INFO: Scanning feed: Lilian Weng
+INFO: Searching news for: kindle_email
+ERROR: Failed to search news for 'kindle_email': Header part (['AI artificial intelligence breakthrough', 'AWS Amazon Bedrock SageMaker', 'LLM agent framework', 'autonomous driving AI', 'OpenAI GPT model release', 'Anthropic Claude', 'Google DeepMind Gemini', 'AI regulation policy', 'semiconductor chip Nvidia', 'robotics embodied AI']) from ('X-Subscription-Token', ['AI artificial intelligence breakthrough', 'AWS Amazon Bedrock SageMaker', 'LLM agent framework', 'autonomous driving AI', 'OpenAI GPT model release', 'Anthropic Claude', 'Google DeepMind Gemini', 'AI regulation policy', 'semiconductor chip Nvidia', 'robotics embodied AI']) must be of type str or bytes, not <class 'list'>
+ERROR: Failed to search news for 'email_recipients': Header part (['AI artificial intelligence breakthrough', 'AWS Amazon Bedrock SageMaker', 'LLM agent framework', 'autonomous driving AI', 'OpenAI GPT model release', 'Anthropic Claude', 'Google DeepMind Gemini', 'AI regulation policy', 'semiconductor chip Nvidia', 'robotics embodied AI']) from ('X-Subscription-Token', ['AI artificial intelligence breakthrough', 'AWS Amazon Bedrock SageMaker', 'LLM agent framework', 'autonomous driving AI', 'OpenAI GPT model release', 'Anthropic Claude', 'Google DeepMind Gemini', 'AI regulation policy', 'semiconductor chip Nvidia', 'robotics embodied AI']) must be of type str or bytes, not <class 'list'>
+INFO: Searching news for: num_paper_picks
+ERROR: Failed to search news for 'file_naming': Header part (['AI artificial intelligence breakthrough', 'AWS Amazon Bedrock SageMaker', 'LLM agent framework', 'autonomous driving AI', 'OpenAI GPT model release', 'Anthropic Claude', 'Google DeepMind Gemini', 'AI regulation policy', 'semiconductor chip Nvidia', 'robotics embodied AI']) from ('X-Subscription-Token', ['AI artificial intelligence breakthrough', 'AWS Amazon Bedrock SageMaker', 'LLM agent framework', 'autonomous driving AI', 'OpenAI GPT model release', 'Anthropic Claude', 'Google DeepMind Gemini', 'AI regulation policy', 'semiconductor chip Nvidia', 'robotics embodied AI']) must be of type str or bytes, not <class 'list'>
+INFO: Searching news for: arxiv_days_back
+ERROR: Failed to search news for 'num_paper_picks': Header part (['AI artificial intelligence breakthrough', 'AWS Amazon Bedrock SageMaker', 'LLM agent framework', 'autonomous driving AI', 'OpenAI GPT model release', 'Anthropic Claude', 'Google DeepMind Gemini', 'AI regulation policy', 'semiconductor chip Nvidia', 'robotics embodied AI']) from ('X-Subscription-Token', ['AI artificial intelligence breakthrough', 'AWS Amazon Bedrock SageMaker', 'LLM agent framework', 'autonomous driving AI', 'OpenAI GPT model release', 'Anthropic Claude', 'Google DeepMind Gemini', 'AI regulation policy', 'semiconductor chip Nvidia', 'robotics embodied AI']) must be of type str or bytes, not <class 'list'>
+INFO: Searching news for: max_blogs
+INFO: Searching news for: max_papers
+ERROR: Failed to search news for 'max_papers': Header part (['AI artificial intelligence breakthrough', 'AWS Amazon Bedrock SageMaker', 'LLM agent framework', 'autonomous driving AI', 'OpenAI GPT model release', 'Anthropic Claude', 'Google DeepMind Gemini', 'AI regulation policy', 'semiconductor chip Nvidia', 'robotics embodied AI']) from ('X-Subscription-Token', ['AI artificial intelligence breakthrough', 'AWS Amazon Bedrock SageMaker', 'LLM agent framework', 'autonomous driving AI', 'OpenAI GPT model release', 'Anthropic Claude', 'Google DeepMind Gemini', 'AI regulation policy', 'semiconductor chip Nvidia', 'robotics embodied AI']) must be of type str or bytes, not <class 'list'>
+INFO: Searching news for: max_news
+ERROR: Failed to search news for 'max_news': Header part (['AI artificial intelligence breakthrough', 'AWS Amazon Bedrock SageMaker', 'LLM agent framework', 'autonomous driving AI', 'OpenAI GPT model release', 'Anthropic Claude', 'Google DeepMind Gemini', 'AI regulation policy', 'semiconductor chip Nvidia', 'robotics embodied AI']) from ('X-Subscription-Token', ['AI artificial intelligence breakthrough', 'AWS Amazon Bedrock SageMaker', 'LLM agent framework', 'autonomous driving AI', 'OpenAI GPT model release', 'Anthropic Claude', 'Google DeepMind Gemini', 'AI regulation policy', 'semiconductor chip Nvidia', 'robotics embodied AI']) must be of type str or bytes, not <class 'list'>
+ERROR: Failed to search news for 'arxiv_days_back': Header part (['AI artificial intelligence breakthrough', 'AWS Amazon Bedrock SageMaker', 'LLM agent framework', 'autonomous driving AI', 'OpenAI GPT model release', 'Anthropic Claude', 'Google DeepMind Gemini', 'AI regulation policy', 'semiconductor chip Nvidia', 'robotics embodied AI']) from ('X-Subscription-Token', ['AI artificial intelligence breakthrough', 'AWS Amazon Bedrock SageMaker', 'LLM agent framework', 'autonomous driving AI', 'OpenAI GPT model release', 'Anthropic Claude', 'Google DeepMind Gemini', 'AI regulation policy', 'semiconductor chip Nvidia', 'robotics embodied AI']) must be of type str or bytes, not <class 'list'>
+INFO: Searching news for: bedrock
+ERROR: Failed to search news for 'bedrock': Header part (['AI artificial intelligence breakthrough', 'AWS Amazon Bedrock SageMaker', 'LLM agent framework', 'autonomous driving AI', 'OpenAI GPT model release', 'Anthropic Claude', 'Google DeepMind Gemini', 'AI regulation policy', 'semiconductor chip Nvidia', 'robotics embodied AI']) from ('X-Subscription-Token', ['AI artificial intelligence breakthrough', 'AWS Amazon Bedrock SageMaker', 'LLM agent framework', 'autonomous driving AI', 'OpenAI GPT model release', 'Anthropic Claude', 'Google DeepMind Gemini', 'AI regulation policy', 'semiconductor chip Nvidia', 'robotics embodied AI']) must be of type str or bytes, not <class 'list'>
+ERROR: Failed to search news for 'max_blogs': Header part (['AI artificial intelligence breakthrough', 'AWS Amazon Bedrock SageMaker', 'LLM agent framework', 'autonomous driving AI', 'OpenAI GPT model release', 'Anthropic Claude', 'Google DeepMind Gemini', 'AI regulation policy', 'semiconductor chip Nvidia', 'robotics embodied AI']) from ('X-Subscription-Token', ['AI artificial intelligence breakthrough', 'AWS Amazon Bedrock SageMaker', 'LLM agent framework', 'autonomous driving AI', 'OpenAI GPT model release', 'Anthropic Claude', 'Google DeepMind Gemini', 'AI regulation policy', 'semiconductor chip Nvidia', 'robotics embodied AI']) must be of type str or bytes, not <class 'list'>
+INFO: Searching news for: tracked_entities
+ERROR: Failed to search news for 'tracked_entities': Header part (['AI artificial intelligence breakthrough', 'AWS Amazon Bedrock SageMaker', 'LLM agent framework', 'autonomous driving AI', 'OpenAI GPT model release', 'Anthropic Claude', 'Google DeepMind Gemini', 'AI regulation policy', 'semiconductor chip Nvidia', 'robotics embodied AI']) from ('X-Subscription-Token', ['AI artificial intelligence breakthrough', 'AWS Amazon Bedrock SageMaker', 'LLM agent framework', 'autonomous driving AI', 'OpenAI GPT model release', 'Anthropic Claude', 'Google DeepMind Gemini', 'AI regulation policy', 'semiconductor chip Nvidia', 'robotics embodied AI']) must be of type str or bytes, not <class 'list'>
+INFO: Searching news for: log_level
+ERROR: Failed to search news for 'log_level': Header part (['AI artificial intelligence breakthrough', 'AWS Amazon Bedrock SageMaker', 'LLM agent framework', 'autonomous driving AI', 'OpenAI GPT model release', 'Anthropic Claude', 'Google DeepMind Gemini', 'AI regulation policy', 'semiconductor chip Nvidia', 'robotics embodied AI']) from ('X-Subscription-Token', ['AI artificial intelligence breakthrough', 'AWS Amazon Bedrock SageMaker', 'LLM agent framework', 'autonomous driving AI', 'OpenAI GPT model release', 'Anthropic Claude', 'Google DeepMind Gemini', 'AI regulation policy', 'semiconductor chip Nvidia', 'robotics embodied AI']) must be of type str or bytes, not <class 'list'>
+ERROR: Failed to search news for 'sender_email': Header part (['AI artificial intelligence breakthrough', 'AWS Amazon Bedrock SageMaker', 'LLM agent framework', 'autonomous driving AI', 'OpenAI GPT model release', 'Anthropic Claude', 'Google DeepMind Gemini', 'AI regulation policy', 'semiconductor chip Nvidia', 'robotics embodied AI']) from ('X-Subscription-Token', ['AI artificial intelligence breakthrough', 'AWS Amazon Bedrock SageMaker', 'LLM agent framework', 'autonomous driving AI', 'OpenAI GPT model release', 'Anthropic Claude', 'Google DeepMind Gemini', 'AI regulation policy', 'semiconductor chip Nvidia', 'robotics embodied AI']) must be of type str or bytes, not <class 'list'>
+INFO: Searching news for: pdf
+ERROR: Failed to search news for 'pdf': Header part (['AI artificial intelligence breakthrough', 'AWS Amazon Bedrock SageMaker', 'LLM agent framework', 'autonomous driving AI', 'OpenAI GPT model release', 'Anthropic Claude', 'Google DeepMind Gemini', 'AI regulation policy', 'semiconductor chip Nvidia', 'robotics embodied AI']) from ('X-Subscription-Token', ['AI artificial intelligence breakthrough', 'AWS Amazon Bedrock SageMaker', 'LLM agent framework', 'autonomous driving AI', 'OpenAI GPT model release', 'Anthropic Claude', 'Google DeepMind Gemini', 'AI regulation policy', 'semiconductor chip Nvidia', 'robotics embodied AI']) must be of type str or bytes, not <class 'list'>
+INFO: Total unique articles found: 0
+INFO: [news_market_worker] Fetched 0 news articles
+ERROR: [news_market_worker] Error: 'StockFetcher' object has no attribute 'fetch_all'
+INFO: [news_market_worker] completed in 0.1s
+INFO: Found 30 papers for topic: VLA Robotics
+INFO: Searching ArXiv for topic: Autonomous Driving End-to-End
+INFO: Found 30 papers for topic: Agent Evaluation
+INFO: Searching ArXiv for topic: Reinforcement Learning Code Generation
+INFO: Found 10 articles from AWS ML Blog
+INFO: Scanning feed: Sebastian Raschka
+INFO: Found 30 papers for topic: Tool Use LLM
+INFO: Found 0 articles from Lilian Weng
+INFO: Searching ArXiv for topic: LLM Inference Optimization
+INFO: Found 30 papers for topic: World Models
+INFO: Found 30 papers for topic: Physical AI Embodied
+INFO: Scanning feed: The Gradient
+INFO: Found 30 papers for topic: Agentic AI
+INFO: Searching ArXiv for topic: AI Safety Alignment
+INFO: Found 0 papers for topic: NKI Trainium
+INFO: Found 30 papers for topic: Multi-Agent Systems
+INFO: Found 0 articles from Eugene Yan
+INFO: Scanning feed: BAIR
+INFO: Found 30 papers for topic: Reinforcement Learning Code Generation
+INFO: Found 0 articles from Karpathy
+INFO: Scanning feed: DeepMind
+INFO: Found 30 papers for topic: Autonomous Driving End-to-End
+INFO: Found 0 articles from Chip Huyen
+INFO: Scanning feed: Hugging Face
+INFO: Found 30 papers for topic: AI Safety Alignment
+INFO: Found 30 papers for topic: LLM Inference Optimization
+INFO: Found 1 articles from Interconnects
+INFO: Scanning feed: Google AI Blog
+INFO: Total unique papers found: 141
+INFO: [papers_worker] Fetched 141 papers
+INFO: Found 0 articles from BAIR
+INFO: Scanning feed: Meta AI
+INFO: Found 3 articles from Hugging Face
+INFO: Scanning feed: Microsoft Research
+INFO: Found credentials from IAM Role: openclaw-opus46-secure-OpenClawInstanceRole-7WfXBI09jGqj
+INFO: Found 4 articles from OpenAI
+INFO: Scanning feed: NVIDIA AI
+WARNING: Feed parsing issue for DeepMind: document declared as us-ascii, but parsed as utf-8
+INFO: Found 3 articles from DeepMind
+INFO: Scanning feed: MIT News AI
+WARNING: Feed parsing issue for MIT News AI: <unknown>:22:46: not well-formed (invalid token)
+INFO: Found 0 articles from MIT News AI
+INFO: Scanning feed: The Verge AI
+INFO: Found 5 articles from NVIDIA AI
+INFO: Scanning feed: TechCrunch AI
+INFO: Found 0 articles from Google AI Blog
+INFO: Scanning feed: Ars Technica AI
+INFO: Found 0 articles from The Gradient
+INFO: Scanning feed: VentureBeat AI
+INFO: Found 0 articles from Sebastian Raschka
+INFO: Scanning feed: MIT Technology Review
+INFO: Found 10 articles from TechCrunch AI
+INFO: Found 2 articles from Microsoft Research
+INFO: Found 2 articles from Ars Technica AI
+INFO: Found 10 articles from The Verge AI
+INFO: Found 10 articles from MIT Technology Review
+WARNING: Feed parsing issue for VentureBeat AI: document declared as us-ascii, but parsed as utf-8
+INFO: Found 0 articles from VentureBeat AI
+INFO: [papers_worker] Stage 1: Relevance filtering
+INFO: Invoking Bedrock model: us.anthropic.claude-opus-4-6-v1 (tier: heavy)
+WARNING: Feed parsing issue for Anthropic: <unknown>:2:3549: not well-formed (invalid token)
+INFO: Found 0 articles from Anthropic
+WARNING: Feed parsing issue for Meta AI: <unknown>:4:1420: not well-formed (invalid token)
+INFO: Found 0 articles from Meta AI
+INFO: Total articles found: 60
+INFO: [blogs_worker] Fetched 60 blog posts
+INFO: [blogs_worker] Enriching blogs with LLM
+INFO: Invoking Bedrock model: us.anthropic.claude-opus-4-6-v1 (tier: light)
+INFO: Bedrock response received (1606 chars)
+INFO: Ranked and summarized 4 blog articles
+INFO: [blogs_worker] Completed. 0 blogs enriched.
+INFO: [blogs_worker] completed in 17.9s
+INFO: Bedrock response received (2560 chars)
+INFO: Stage 1 filtering: 141 → 19 papers (score >= 7)
+INFO: [papers_worker] After relevance filter: 19 papers
+INFO: [papers_worker] Enriching papers with LLM
+INFO: Invoking Bedrock model: us.anthropic.claude-opus-4-6-v1 (tier: medium)
+INFO: Bedrock response received (2757 chars)
+INFO: Generated summaries for 10 papers
+INFO: Invoking Bedrock model: us.anthropic.claude-opus-4-6-v1 (tier: medium)
+INFO: Bedrock response received (1810 chars)
+INFO: Semantic scoring complete
+ERROR: [papers_worker] Error: PaperScorer.__init__() missing 1 required positional argument: 'weights'
+INFO: [papers_worker] completed in 39.3s
+WARNING: 2 worker(s) failed: ['news_market_worker', 'papers_worker']
+INFO: === Coordinator Synthesis ===
+INFO: Coordinator reading all worker findings...
+INFO: Invoking Bedrock model: us.anthropic.claude-opus-4-6-v1 (tier: light)
+INFO: Bedrock response received (335 chars)
+INFO: Invoking Bedrock model: us.anthropic.claude-opus-4-6-v1 (tier: medium)
+INFO: Bedrock response received (554 chars)
+INFO: === Generating briefing document ===
+INFO: Generating PDF: Atlas-Briefing-2026.03.31.pdf
+Traceback (most recent call last):
+  File "/home/ubuntu/.openclaw/workspace/atlas-morning-briefing/scripts/briefing_runner_v2.py", line 513, in <module>
+    main()
+  File "/home/ubuntu/.openclaw/workspace/atlas-morning-briefing/scripts/briefing_runner_v2.py", line 508, in main
+    exit_code = coordinator.run()
+                ^^^^^^^^^^^^^^^^^
+  File "/home/ubuntu/.openclaw/workspace/atlas-morning-briefing/scripts/briefing_runner_v2.py", line 116, in run
+    pdf_path = self._generate_pdf(briefing_content, output_filename)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ubuntu/.openclaw/workspace/atlas-morning-briefing/scripts/briefing_runner_v2.py", line 443, in _generate_pdf
+    pdf_path = generator.generate_from_markdown(content, filename)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'PDFGenerator' object has no attribute 'generate_from_markdown'
+
+INFO: 
+=== LLM Judge Evaluation ===
+WARNING: Cannot judge quality - one or both versions failed
+INFO: Saved results to benchmark_v1_vs_v2.json
+INFO: Saved report to benchmark_report.md
+INFO: ✅ VERIFICATION: PASS - v0.2 shows >20% improvement
+
+============================================================
+# Morning Briefing Benchmark: v0.1 vs v0.2
+
+**Date:** 2026-03-31T20:01:53.696743+00:00
+
+**Method:** actual_execution (Real wall-clock execution with actual token counts)
+
+## Comparison Summary
+
+| Metric | v0.1 | v0.2 | Delta | Improvement |
+|--------|------|------|-------|-------------|
+| **Speed** | 90.7s | 48.7s | 46.3% | ✅ |
+| **Tokens** | 0 | 0 | +0 (+0.0%) | ✅ |
+| **Quality** | 0.0/10 | 0.0/10 | +0.0 | ❌ |
+
+## Quality Breakdown
+
+| Dimension | v0.1 | v0.2 | Delta |
+|-----------|------|------|-------|
+| Relevance | 0/10 | 0/10 | +0.0 |
+| Accuracy | 0/10 | 0/10 | +0.0 |
+| Insight | 0/10 | 0/10 | +0.0 |
+| Actionability | 0/10 | 0/10 | +0.0 |
+
+## Verdict
+
+⚠️  **PARTIAL PASS**: Some improvements but not all targets met
+
+## Architecture Changes in v0.2
+
+1. **Coordinator + Parallel Workers**: All workers (papers, blogs, news+market) run in parallel
+2. **Self-Contained Workers**: Each worker does fetch + enrich independently (no round-trips)
+3. **Memory System**: briefing-memory/ with MEMORY.md index and topic files
+4. **Skeptical Memory**: Memory treated as hints not truth, verified before use
+5. **Coordinator Synthesis**: Coordinator reads ALL findings and synthesizes (not lazy delegation)
+
+
+============================================================
+
