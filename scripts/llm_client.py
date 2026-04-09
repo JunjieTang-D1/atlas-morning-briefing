@@ -31,9 +31,9 @@ class LLMClient:
     }
 
     DEFAULT_FALLBACK_MODELS = {
-        "heavy": "qwen/qwen3.6-plus-preview",
-        "medium": "stepfun/step-3.5-flash",
-        "light": "stepfun/step-3.5-flash",
+        "heavy": "qwen/qwen3-next-80b-a3b-instruct:free",
+        "medium": "meta-llama/llama-3.3-70b-instruct:free",
+        "light": "google/gemma-4-31b-it:free",
     }
 
     def __init__(self, config: Optional[Dict[str, Any]] = None):
