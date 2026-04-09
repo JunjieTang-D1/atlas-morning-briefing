@@ -42,6 +42,7 @@ logs/*.log
 !README.md
 !SKILL.md
 !SECURITY_FIXES.md
+!CHANGELOG.md
 !examples/*.md
 !references/*.md
 atlas-morning-briefing.json
