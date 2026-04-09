@@ -9,7 +9,7 @@ Supports **Claude Sonnet 4, Kimi K2.5, GLM 4.7, DeepSeek V3.2, Nova Pro, and Nov
 ## What It Does
 
 ```
-6:50 AM  ┌─ ArXiv API ──────── 60+ papers across 12 topic areas
+6:50 AM  ┌─ DeepXiv SDK ────── 90+ papers via semantic hybrid search
          ├─ RSS Feeds ──────── 22 blogs (Anthropic, Karpathy, BAIR, DeepMind...)
          ├─ Finnhub API ────── Stock watchlist with OHLC data
          └─ Brave Search ───── 45+ news headlines from 10 queries
@@ -29,7 +29,7 @@ Supports **Claude Sonnet 4, Kimi K2.5, GLM 4.7, DeepSeek V3.2, Nova Pro, and Nov
 
 ### Pipeline Steps
 
-1. **Fetch** — ArXiv papers, RSS blogs, and stock quotes are fetched in parallel (3 threads). News queries run after optional dynamic query generation from the intelligence layer.
+1. **Fetch** — Papers via DeepXiv semantic search (with ArXiv API fallback), RSS blogs, and stock quotes are fetched in parallel (3 threads). Top 10 papers auto-enriched with TLDR summaries, keywords, and GitHub URLs. News queries run after optional dynamic query generation from the intelligence layer.
 2. **Deduplicate** — Same-day news/blog overlap removed by URL domain and title. Similar papers collapsed at >85% title similarity (SequenceMatcher). Cross-day dedup skips items from yesterday's briefing via `.atlas-state.json`.
 3. **Filter & Score** — Papers scored by a weighted formula: `has_code×7 + topic_match×3 + recency×2 + citation×1`, with infrastructure penalties for datacenter-scale or theory-only work. LLM semantic scoring optionally supplements TF-IDF.
 4. **Enrich** — Three parallel LLM calls: paper summarization + semantic scoring, news ranking, blog ranking. Then two more: stock-news correlation, emerging theme detection.
@@ -47,6 +47,7 @@ Supports **Claude Sonnet 4, Kimi K2.5, GLM 4.7, DeepSeek V3.2, Nova Pro, and Nov
 ### Prerequisites
 
 - Python 3.10+
+- [DeepXiv SDK](https://github.com/DeepXiv/deepxiv_sdk) (auto-registers free token on first use)
 - [Finnhub API key](https://finnhub.io/) (free tier)
 - [Brave Search API key](https://brave.com/search/api/) (free tier)
 - Gmail App Password (for Kindle/email delivery)
@@ -60,6 +61,7 @@ cd atlas-morning-briefing
 python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
+pip install deepxiv-sdk  # optional but recommended
 ```
 
 ### Configure
@@ -129,7 +131,7 @@ atlas-morning-briefing/
 ├── requirements.txt               # Pinned dependencies
 ├── scripts/
 │   ├── briefing_runner.py         # Main orchestrator — CLI, parallel fetch, markdown generation
-│   ├── arxiv_scanner.py           # ArXiv API client — parallel topic search (8 threads)
+│   ├── arxiv_scanner.py           # DeepXiv SDK semantic search (ArXiv API fallback)
 │   ├── blog_scanner.py            # RSS/Atom feed scanner — parallel (8 threads)
 │   ├── stock_fetcher.py           # Finnhub API client — quotes + company profiles
 │   ├── news_aggregator.py         # Brave Search API client — parallel (4 threads)
@@ -156,6 +158,7 @@ atlas-morning-briefing/
 ├── assets/
 │   └── architecture.svg           # Architecture diagram
 ├── logs/                          # Runtime logs (gitignored)
+├── CHANGELOG.md                   # Version history
 ├── CONTRIBUTING.md
 ├── SKILL.md
 └── LICENSE                        # MIT
@@ -257,7 +260,8 @@ Output formats: Markdown (`.md`), PDF (`.pdf`), and HTML email.
 
 | Service | Cost | Purpose |
 |---|---|---|
-| ArXiv API | Free | Paper metadata and abstracts |
+| DeepXiv SDK | Free (1,000 req/day) | Semantic paper search + TLDR enrichment |
+| ArXiv API | Free (fallback) | Paper metadata and abstracts |
 | Finnhub | Free tier (60 calls/min) | Stock quotes and company profiles |
 | Brave Search | Free tier ($5/mo credit) | News headlines |
 | Gmail SMTP | Free | Kindle and email delivery |
