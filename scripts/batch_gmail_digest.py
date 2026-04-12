@@ -437,7 +437,7 @@ def render_and_publish(
                 )
                 if podcast_url:
                     frontmatter += f"podcast-url: '{podcast_url}'\n"
-                frontmatter += f"---\n\n"
+                frontmatter += "---\n\n"
 
                 writer._put_note(vault_path, frontmatter + md)
                 logger.info(f"Published to Obsidian: {vault_path}")

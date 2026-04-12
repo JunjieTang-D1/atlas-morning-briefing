@@ -1,7 +1,6 @@
 """Tests for BriefingCoordinator (v2 runner)."""
 
 from datetime import datetime
-from unittest.mock import patch
 
 from scripts.briefing_runner import BriefingCoordinator
 

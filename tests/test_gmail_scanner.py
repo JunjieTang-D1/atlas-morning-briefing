@@ -1,11 +1,10 @@
 # Copyright (c) 2026 Junjie Tang. MIT License. See LICENSE file for details.
 """Tests for Gmail scanner module."""
 
-import email
 import imaplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
-from unittest.mock import MagicMock, call, patch
+from unittest.mock import MagicMock, patch
 
 from scripts.gmail_scanner import GmailScanner
 

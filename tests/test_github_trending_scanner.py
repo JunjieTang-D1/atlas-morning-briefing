@@ -1,7 +1,6 @@
 # Copyright (c) 2026 Junjie Tang. MIT License. See LICENSE file for details.
 """Tests for GitHub trending scanner module."""
 
-from io import BytesIO
 from unittest.mock import patch, MagicMock
 
 from scripts.github_trending_scanner import GitHubTrendingScanner
