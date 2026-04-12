@@ -8,11 +8,11 @@ If the env var is absent (or otel.enabled is false), the global NoOpTracerProvid
 is left in place — all tracing calls become zero-cost no-ops.
 """
 
+import contextvars
 import logging
 import os
 from typing import Any, Callable, Dict, TypeVar
 
-from opentelemetry import context as otel_context
 from opentelemetry import trace
 from opentelemetry.sdk.resources import Resource
 from opentelemetry.sdk.resources import SERVICE_NAME
@@ -83,18 +83,17 @@ def with_otel_context(fn: Callable[[], _F]) -> Callable[[], _F]:
     Use this when submitting work to a ThreadPoolExecutor so that child spans
     appear under the correct parent trace rather than as disconnected roots.
 
+    Uses contextvars.copy_context() which copies ALL context variables (including
+    OTel's internal _CURRENT_CONTEXT) — more reliable than otel_context.attach().
+
     Example::
 
         ctx_fn = with_otel_context(worker.run)
         future = executor.submit(ctx_fn)
     """
-    ctx = otel_context.get_current()
+    ctx = contextvars.copy_context()
 
     def _wrapper() -> _F:  # type: ignore[type-var]
-        token = otel_context.attach(ctx)
-        try:
-            return fn()
-        finally:
-            otel_context.detach(token)
+        return ctx.run(fn)
 
     return _wrapper

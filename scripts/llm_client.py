@@ -172,6 +172,11 @@ class LLMClient:
 
             span.set_attribute("gen_ai.fallback_used", used_fallback)
 
+            # Langfuse input/output attributes (truncated to avoid oversized spans)
+            span.set_attribute("langfuse.observation.input", prompt[:2000])
+            if result is not None:
+                span.set_attribute("langfuse.observation.output", result[:2000])
+
             if result is None:
                 logger.error("All LLM providers failed")
                 span.set_status(trace.StatusCode.ERROR, "All LLM providers failed")
