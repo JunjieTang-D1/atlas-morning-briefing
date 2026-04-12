@@ -1336,7 +1336,7 @@ class BriefingCoordinator:
                         logger.info(f"Podcast URL injected: {podcast_url}")
                     elif self.podcast_generator.enabled:
                         self.status["podcast_error"] = "failed — check logs (possible auth expiry)"
-                        self.errors.append("Podcast generation failed — see ERROR logs for details")
+                        logger.warning("Podcast generation failed — briefing continues without podcast link")
 
                 # Save markdown
                 md_path = f"{filename}.md"
