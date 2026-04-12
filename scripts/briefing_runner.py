@@ -40,7 +40,7 @@ from scripts.podcast_generator import PodcastGenerator
 from scripts.config_validator import validate_config, check_environment
 from scripts.utils import load_config
 from opentelemetry import trace
-from scripts.tracing import setup_tracing, get_tracer
+from scripts.tracing import setup_tracing, get_tracer, with_otel_context
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 logger = logging.getLogger(__name__)
@@ -288,7 +288,7 @@ class BriefingCoordinator:
 
         findings: List[Dict[str, Any]] = []
         with ThreadPoolExecutor(max_workers=len(workers)) as executor:
-            futures = {executor.submit(w.run): w for w in workers}
+            futures = {executor.submit(with_otel_context(w.run)): w for w in workers}
             for future in as_completed(futures):
                 worker = futures[future]
                 try:
@@ -1197,10 +1197,10 @@ class BriefingCoordinator:
                     # Parallel batch 1
                     interest_topics = self.config.get("interest_profile", [])
                     with ThreadPoolExecutor(max_workers=4) as pool:
-                        fp = pool.submit(self._enrich_papers, papers, topics)
-                        fn = pool.submit(self.intelligence.rank_and_summarize_news, news, topics)
-                        fb = pool.submit(self.intelligence.rank_and_summarize_blogs, blogs, topics)
-                        fc = pool.submit(self.intelligence.rank_source_links, community_picks, interest_topics)
+                        fp = pool.submit(with_otel_context(lambda: self._enrich_papers(papers, topics)))
+                        fn = pool.submit(with_otel_context(lambda: self.intelligence.rank_and_summarize_news(news, topics)))
+                        fb = pool.submit(with_otel_context(lambda: self.intelligence.rank_and_summarize_blogs(blogs, topics)))
+                        fc = pool.submit(with_otel_context(lambda: self.intelligence.rank_source_links(community_picks, interest_topics)))
 
                         papers = fp.result()
                         news = fn.result()
@@ -1209,11 +1209,10 @@ class BriefingCoordinator:
 
                     # Parallel batch 2
                     with ThreadPoolExecutor(max_workers=2) as pool:
-                        fs = pool.submit(self.intelligence.correlate_stocks_and_news, stocks, news)
-                        ft = pool.submit(
-                            self.intelligence.detect_emerging_themes,
+                        fs = pool.submit(with_otel_context(lambda: self.intelligence.correlate_stocks_and_news(stocks, news)))
+                        ft = pool.submit(with_otel_context(lambda: self.intelligence.detect_emerging_themes(
                             papers, blogs, news, newsletters, github_trending,
-                        )
+                        )))
                         stocks = fs.result()
                         emerging_themes = ft.result()
 

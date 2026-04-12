@@ -10,8 +10,9 @@ is left in place — all tracing calls become zero-cost no-ops.
 
 import logging
 import os
-from typing import Any, Dict
+from typing import Any, Callable, Dict, TypeVar
 
+from opentelemetry import context as otel_context
 from opentelemetry import trace
 from opentelemetry.sdk.resources import Resource
 from opentelemetry.sdk.resources import SERVICE_NAME
@@ -71,3 +72,29 @@ def setup_tracing(config: Dict[str, Any]) -> None:
 def get_tracer(name: str = "personal.briefing") -> trace.Tracer:
     """Return a tracer from the current provider (NoOp if not initialised)."""
     return trace.get_tracer(name)
+
+
+_F = TypeVar("_F")
+
+
+def with_otel_context(fn: Callable[[], _F]) -> Callable[[], _F]:
+    """Wrap a zero-argument callable so it runs with the caller's OTel context.
+
+    Use this when submitting work to a ThreadPoolExecutor so that child spans
+    appear under the correct parent trace rather than as disconnected roots.
+
+    Example::
+
+        ctx_fn = with_otel_context(worker.run)
+        future = executor.submit(ctx_fn)
+    """
+    ctx = otel_context.get_current()
+
+    def _wrapper() -> _F:  # type: ignore[type-var]
+        token = otel_context.attach(ctx)
+        try:
+            return fn()
+        finally:
+            otel_context.detach(token)
+
+    return _wrapper
