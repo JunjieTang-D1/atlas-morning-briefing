@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from scripts.podcast_generator import PodcastGenerator
+from scripts.podcast_generator import PodcastGenerator, _RETRY_BACKOFFS
 
 
 # ---------------------------------------------------------------------------
@@ -279,7 +279,8 @@ class TestGenerateFailures:
     def test_notebook_creation_failure_returns_none(self, generator_with_storage):
         mock_client = _make_mock_client()
         mock_client.notebooks.create = AsyncMock(side_effect=Exception("create failed"))
-        with patch("scripts.podcast_generator.NotebookLMClient") as MockClient:
+        with patch("scripts.podcast_generator.NotebookLMClient") as MockClient, \
+             patch("scripts.podcast_generator.time.sleep"):
             MockClient.from_storage = AsyncMock(return_value=mock_client)
             result = generator_with_storage.generate("content", datetime(2026, 4, 6))
         assert result is None
@@ -287,11 +288,14 @@ class TestGenerateFailures:
     def test_set_public_failure_returns_none_and_deletes_notebook(self, generator_with_storage):
         mock_client = _make_mock_client()
         mock_client.sharing.set_public = AsyncMock(side_effect=Exception("share failed"))
-        with patch("scripts.podcast_generator.NotebookLMClient") as MockClient:
+        with patch("scripts.podcast_generator.NotebookLMClient") as MockClient, \
+             patch("scripts.podcast_generator.time.sleep"):
             MockClient.from_storage = AsyncMock(return_value=mock_client)
             result = generator_with_storage.generate("content", datetime(2026, 4, 6))
         assert result is None
-        mock_client.notebooks.delete.assert_awaited_once_with("nb-test-123")
+        # Retry loop makes 3 attempts — delete called once per attempt
+        assert mock_client.notebooks.delete.await_count == len(_RETRY_BACKOFFS) + 1
+        mock_client.notebooks.delete.assert_awaited_with("nb-test-123")
 
     def test_audio_start_failure_still_returns_url(self, generator_with_storage):
         mock_client = _make_mock_client()
@@ -315,7 +319,8 @@ class TestGenerateFailures:
         assert result == FAKE_SHARE_URL
 
     def test_client_init_error_returns_none(self, generator_with_storage):
-        with patch("scripts.podcast_generator.NotebookLMClient") as MockClient:
-            MockClient.from_storage = AsyncMock(side_effect=Exception("auth failed"))
+        with patch("scripts.podcast_generator.NotebookLMClient") as MockClient, \
+             patch("scripts.podcast_generator.time.sleep"):
+            MockClient.from_storage = AsyncMock(side_effect=Exception("network error"))
             result = generator_with_storage.generate("content", datetime(2026, 4, 6))
         assert result is None
