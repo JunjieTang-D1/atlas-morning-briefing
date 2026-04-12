@@ -1441,14 +1441,28 @@ class BriefingCoordinator:
             self.distribute_briefing(markdown_content, pdf_path, filename)
 
         # Obsidian (outside root span — independent side-effect)
-        self.publish_to_obsidian(
-            markdown_content=markdown_content, date=now, top_papers=top_papers,
-            emerging_themes=emerging_themes,
-            entity_mentions=synthesis.get("entity_mentions", []),
-            trending_topics=previous_state.get("trending_topics", {}),
-            weekly_deep_dive=weekly_deep_dive, briefing_name=filename,
-            weekly_items=weekly_items, podcast_url=podcast_url,
-        )
+        with self._tracer.start_as_current_span("personal.obsidian") as obsidian_span:
+            obsidian_span.set_attribute("langfuse.observation.type", "span")
+            obsidian_span.set_attribute("langfuse.observation.input", json.dumps({
+                "briefing_name": filename,
+                "papers": len(top_papers),
+                "emerging_themes": len(emerging_themes),
+                "podcast_url": podcast_url or "none",
+            }))
+            obsidian_results = self.publish_to_obsidian(
+                markdown_content=markdown_content, date=now, top_papers=top_papers,
+                emerging_themes=emerging_themes,
+                entity_mentions=synthesis.get("entity_mentions", []),
+                trending_topics=previous_state.get("trending_topics", {}),
+                weekly_deep_dive=weekly_deep_dive, briefing_name=filename,
+                weekly_items=weekly_items, podcast_url=podcast_url,
+            )
+            obsidian_span.set_attribute("langfuse.observation.output", json.dumps({
+                "briefing": obsidian_results.get("briefing", "skipped"),
+                "entities": bool(obsidian_results.get("entities")),
+                "concepts": bool(obsidian_results.get("concepts")),
+                "weekly_synthesis": bool(obsidian_results.get("weekly_synthesis")),
+            }))
 
         # Mark newsletters as read
         ns_config = self.config.get("newsletter_source", {})
