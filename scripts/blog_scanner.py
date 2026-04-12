@@ -9,13 +9,16 @@ Scans RSS feeds for new blog articles.
 import argparse
 import json
 import logging
+import socket
 import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+from urllib.error import URLError
 
 import feedparser
 
+from scripts.circuit_breaker import CircuitBreakerRegistry, CircuitOpenError
 from scripts.utils import load_config
 
 
@@ -62,7 +65,20 @@ class BlogScanner:
         articles = []
         try:
             logger.info(f"Scanning feed: {feed_name}")
-            feed = feedparser.parse(feed_url)
+
+            def _fetch() -> feedparser.FeedParserDict:
+                result = feedparser.parse(feed_url)
+                # feedparser swallows network errors into bozo_exception.
+                # Re-raise network-level failures so the circuit breaker can
+                # count them; let content/encoding warnings pass through.
+                if result.bozo and not result.entries:
+                    exc = result.bozo_exception
+                    if isinstance(exc, (URLError, socket.timeout, OSError, ConnectionError)):
+                        raise exc
+                return result
+
+            cb = CircuitBreakerRegistry.get(f"rss:{feed_url}", failure_threshold=3, recovery_timeout=120.0)
+            feed = cb.call(_fetch)
 
             if feed.bozo:
                 logger.warning(f"Feed parsing issue for {feed_name}: {feed.bozo_exception}")
@@ -103,6 +119,9 @@ class BlogScanner:
             logger.info(f"Found {len(articles)} articles from {feed_name}")
             return articles
 
+        except CircuitOpenError as e:
+            logger.warning(f"Feed '{feed_name}' skipped (circuit open): {e}")
+            return []
         except Exception as e:
             logger.error(f"Failed to scan feed '{feed_name}': {e}")
             return []
