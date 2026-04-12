@@ -44,6 +44,10 @@ class BaseWorker(ABC):
         with _worker_tracer.start_as_current_span(
             f"personal.worker.{self.worker_name}"
         ) as span:
+            span.set_attribute("langfuse.observation.type", "span")
+            span.set_attribute("langfuse.observation.input", json.dumps({
+                "worker": self.worker_name,
+            }))
             finding = self.execute()
             span.set_attribute("worker.status", finding.get("status", ""))
             span.set_attribute("worker.items_found", finding["metadata"].get("items_found", 0))

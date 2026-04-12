@@ -14,6 +14,7 @@ from typing import Any, Dict, Optional
 
 import requests
 from opentelemetry import trace
+from scripts.circuit_breaker import CircuitBreakerRegistry, CircuitOpenError
 
 _llm_tracer = trace.get_tracer("personal.llm")
 
@@ -138,6 +139,7 @@ class LLMClient:
         temp = temperature if temperature is not None else self.temperature
 
         with _llm_tracer.start_as_current_span(name) as span:
+            span.set_attribute("langfuse.observation.type", "generation")
             span.set_attribute("gen_ai.operation.name", "chat")
             span.set_attribute("gen_ai.request.tier", tier)
             span.set_attribute("gen_ai.request.max_tokens", tokens)
@@ -219,7 +221,8 @@ class LLMClient:
 
         try:
             logger.info(f"Invoking MiniMax: {self._primary_model}")
-            resp = requests.post(url, headers=headers, json=body, timeout=120)
+            cb = CircuitBreakerRegistry.get("minimax-api", failure_threshold=3, recovery_timeout=120.0)
+            resp = cb.call(requests.post, url, headers=headers, json=body, timeout=120)
             resp.raise_for_status()
             data = resp.json()
 
@@ -249,6 +252,9 @@ class LLMClient:
             }
             logger.info(f"MiniMax response received ({len(text)} chars, finish_reason={finish_reason})")
             return text, token_usage
+        except CircuitOpenError as e:
+            logger.warning(f"MiniMax skipped: {e}")
+            return None, {}
         except (requests.RequestException, KeyError, IndexError) as e:
             logger.error(f"MiniMax API error: {e}")
             return None, {}
@@ -284,9 +290,8 @@ class LLMClient:
 
         try:
             logger.info(f"Invoking OpenRouter: {model}")
-            resp = requests.post(
-                self._fallback_base_url, headers=headers, json=body, timeout=120
-            )
+            cb = CircuitBreakerRegistry.get("openrouter-api", failure_threshold=3, recovery_timeout=120.0)
+            resp = cb.call(requests.post, self._fallback_base_url, headers=headers, json=body, timeout=120)
             resp.raise_for_status()
             data = resp.json()
             text = data["choices"][0]["message"]["content"]
@@ -300,6 +305,9 @@ class LLMClient:
             }
             logger.info(f"OpenRouter response received ({len(text)} chars)")
             return text, token_usage
+        except CircuitOpenError as e:
+            logger.warning(f"OpenRouter skipped: {e}")
+            return None, {}
         except (requests.RequestException, KeyError, IndexError) as e:
             logger.error(f"OpenRouter API error: {e}")
             return None, {}

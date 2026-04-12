@@ -13,6 +13,8 @@ from typing import Any, Dict, List
 from urllib.request import Request, urlopen
 from urllib.error import URLError
 
+from scripts.circuit_breaker import CircuitBreakerRegistry, CircuitOpenError
+
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 logger = logging.getLogger(__name__)
 
@@ -119,14 +121,21 @@ class GitHubTrendingScanner:
         Returns:
             List of article-like dicts compatible with the blog/news format.
         """
-        try:
+        def _fetch_html() -> str:
             req = Request(_TRENDING_URL, headers={"User-Agent": _USER_AGENT})
             try:
                 with urlopen(req, timeout=30) as resp:
-                    html = resp.read().decode("utf-8", errors="replace")
+                    return resp.read().decode("utf-8", errors="replace")
             except http.client.IncompleteRead as e:
                 logger.warning(f"GitHub trending: IncompleteRead ({len(e.partial)} bytes) — using partial data")
-                html = e.partial.decode("utf-8", errors="replace")
+                return e.partial.decode("utf-8", errors="replace")
+
+        try:
+            cb = CircuitBreakerRegistry.get("github-trending", failure_threshold=2, recovery_timeout=120.0)
+            html = cb.call(_fetch_html)
+        except CircuitOpenError as e:
+            logger.warning(f"GitHub Trending skipped (circuit open): {e}")
+            return []
         except URLError as e:
             logger.error(f"Failed to fetch GitHub trending: {e}")
             return []

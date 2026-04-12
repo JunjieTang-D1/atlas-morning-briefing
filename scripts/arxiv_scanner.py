@@ -16,6 +16,7 @@ from typing import Any, Dict, List, Optional
 
 import requests
 
+from scripts.circuit_breaker import CircuitBreakerRegistry, CircuitOpenError
 from scripts.utils import load_config
 
 try:
@@ -88,13 +89,17 @@ class ArxivScanner:
             }
 
             logger.info(f"Searching ArXiv for topic: {topic}")
-            response = requests.get(self.ARXIV_API_URL, params=params, timeout=30)
+            cb = CircuitBreakerRegistry.get("arxiv-api", failure_threshold=3, recovery_timeout=120.0)
+            response = cb.call(requests.get, self.ARXIV_API_URL, params=params, timeout=30)
             response.raise_for_status()
 
             papers = self._parse_arxiv_response(response.text, start_date)
             logger.info(f"Found {len(papers)} papers for topic: {topic}")
             return papers
 
+        except CircuitOpenError as e:
+            logger.warning(f"ArXiv skipped (circuit open): {e}")
+            return []
         except requests.RequestException as e:
             logger.error(f"Failed to search ArXiv for topic '{topic}': {e}")
             return []

@@ -1127,6 +1127,7 @@ class BriefingCoordinator:
 
             # --- Spawn all workers in parallel ---
             with self._tracer.start_as_current_span("personal.fetch") as fetch_span:
+                fetch_span.set_attribute("langfuse.observation.type", "span")
                 logger.info("=== Spawning parallel workers ===")
                 findings = self._spawn_workers()
                 fetch_span.set_attribute("langfuse.observation.output", json.dumps({
@@ -1163,6 +1164,7 @@ class BriefingCoordinator:
                 )
 
             with self._tracer.start_as_current_span("personal.fetch.news") as fetch_news_span:
+                fetch_news_span.set_attribute("langfuse.observation.type", "span")
                 fetch_news_span.set_attribute("langfuse.observation.input", json.dumps({
                     "queries": news_queries[:3],
                     "query_count": len(news_queries),
@@ -1205,6 +1207,7 @@ class BriefingCoordinator:
             emerging_themes: List[str] = []
             if self.intelligence.available:
                 with self._tracer.start_as_current_span("personal.enrich") as enrich_span:
+                    enrich_span.set_attribute("langfuse.observation.type", "span")
                     enrich_span.set_attribute("langfuse.observation.input", json.dumps({
                         "papers": len(papers),
                         "blogs": len(blogs),
@@ -1266,6 +1269,7 @@ class BriefingCoordinator:
             # Synthesis
             if self.intelligence.available:
                 with self._tracer.start_as_current_span("personal.synthesize") as synth_span:
+                    synth_span.set_attribute("langfuse.observation.type", "span")
                     top_papers = self.intelligence.assess_reproduction_feasibility(top_papers)
                     top_papers = self._ensure_paper_summaries(top_papers[:3]) + top_papers[3:]
 
@@ -1317,6 +1321,7 @@ class BriefingCoordinator:
 
             podcast_url: Optional[str] = None
             with self._tracer.start_as_current_span("personal.render") as render_span:
+                render_span.set_attribute("langfuse.observation.type", "span")
                 filename = self._format_filename(now)
                 markdown_content = self.generate_markdown_briefing(
                     papers, blogs, stocks, news, top_papers, synthesis,
@@ -1326,6 +1331,7 @@ class BriefingCoordinator:
 
                 # Podcast (child span inside render so markdown_content is available)
                 with self._tracer.start_as_current_span("personal.podcast") as podcast_span:
+                    podcast_span.set_attribute("langfuse.observation.type", "span")
                     podcast_span.set_attribute("podcast.enabled", str(self.podcast_generator.enabled))
                     if self.podcast_generator.enabled:
                         _max_top = self._get_limit("max_top_papers_render", 3)

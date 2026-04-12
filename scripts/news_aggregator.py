@@ -16,6 +16,7 @@ from typing import Any, Dict, List
 
 import requests
 
+from scripts.circuit_breaker import CircuitBreakerRegistry, CircuitOpenError
 from scripts.utils import load_config
 
 
@@ -65,7 +66,9 @@ class NewsAggregator:
                 "freshness": "pd",  # Past day
             }
 
-            response = requests.get(
+            cb = CircuitBreakerRegistry.get("brave-search-api", failure_threshold=3, recovery_timeout=60.0)
+            response = cb.call(
+                requests.get,
                 self.BRAVE_SEARCH_URL,
                 headers=headers,
                 params=params,
@@ -92,6 +95,9 @@ class NewsAggregator:
             logger.info(f"Found {len(articles)} articles for query: {query}")
             return articles
 
+        except CircuitOpenError as e:
+            logger.warning(f"Brave Search skipped (circuit open): {e}")
+            return []
         except requests.RequestException as e:
             logger.error(f"Failed to search news for '{query}': {e}")
             return []
