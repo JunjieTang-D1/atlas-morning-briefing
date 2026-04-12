@@ -31,3 +31,6 @@ opentelemetry-instrumentation-requests>=0.46b0
 # NotebookLM podcast generation
 notebooklm-py>=0.3.0
 
+# Supabase state persistence
+supabase>=2.0.0
+

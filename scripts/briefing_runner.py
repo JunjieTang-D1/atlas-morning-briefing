@@ -48,6 +48,173 @@ logger = logging.getLogger(__name__)
 STATE_FILENAME = ".personal-state.json"
 
 
+class _SupabaseStateStore:
+    """Supabase-backed state store with local-file fallback for dev.
+
+    Uses SUPABASE_URL + SUPABASE_SERVICE_KEY env vars.  When either is absent
+    the store transparently falls back to STATE_FILENAME on disk so local
+    development works without a database.
+    """
+
+    TABLE = "briefing_state"
+
+    def __init__(self) -> None:
+        url = os.environ.get("SUPABASE_URL", "")
+        key = os.environ.get("SUPABASE_SERVICE_KEY", "")
+        self._client = None
+        if url and key:
+            try:
+                from supabase import create_client  # type: ignore
+
+                self._client = create_client(url, key)
+            except Exception as exc:  # pragma: no cover
+                logger.warning("Supabase init failed (%s) — using file fallback", exc)
+
+    # ------------------------------------------------------------------
+    # Public API
+    # ------------------------------------------------------------------
+
+    def load(self) -> Dict[str, Any]:
+        """Return the most-recent state row, or {} if none exists."""
+        if self._client is not None:
+            try:
+                resp = (
+                    self._client.table(self.TABLE)
+                    .select("*")
+                    .order("date", desc=True)
+                    .limit(1)
+                    .execute()
+                )
+                rows = resp.data
+                if rows:
+                    return self._from_row(rows[0])
+            except Exception as exc:
+                logger.warning("Supabase load failed (%s) — using file fallback", exc)
+
+        # File fallback
+        state_path = Path(STATE_FILENAME)
+        if state_path.exists():
+            try:
+                with open(state_path) as f:
+                    return json.load(f)
+            except (json.JSONDecodeError, IOError):
+                pass
+        return {}
+
+    def save(
+        self,
+        papers: List[Dict[str, Any]],
+        blogs: List[Dict[str, Any]],
+        news: List[Dict[str, Any]],
+        stocks: List[Dict[str, Any]],
+        emerging_themes: List[str],
+        trending_topics: Optional[Dict[str, Any]] = None,
+        weekly_items: Optional[List[Dict[str, Any]]] = None,
+        github_trending: Optional[List[Dict[str, Any]]] = None,
+        email_sent_date: Optional[str] = None,
+    ) -> None:
+        """Upsert state. Any field passed as None is omitted from the update."""
+        today = datetime.now().strftime("%Y-%m-%d")
+        state: Dict[str, Any] = {
+            "date": today,
+            "top_paper_titles": [p.get("title", "") for p in papers[:10]],
+            "top_blog_titles": [b.get("title", "") for b in blogs[:10]],
+            "top_news_titles": [n.get("title", "") for n in news[:10]],
+            "top_github_titles": [r.get("title", "") for r in (github_trending or [])[:20]],
+            "stock_closes": {
+                s.get("symbol", ""): s.get("current_price", 0)
+                for s in stocks
+                if "error" not in s
+            },
+            "emerging_themes": emerging_themes,
+        }
+        if trending_topics is not None:
+            state["trending_topics"] = trending_topics
+        if weekly_items is not None:
+            state["weekly_items"] = weekly_items
+        if email_sent_date is not None:
+            state["email_sent_date"] = email_sent_date
+
+        if self._client is not None:
+            try:
+                self._client.table(self.TABLE).upsert(state).execute()
+                return
+            except Exception as exc:
+                logger.warning("Supabase save failed (%s) — using file fallback", exc)
+
+        # File fallback
+        try:
+            with open(STATE_FILENAME, "w") as f:
+                json.dump(state, f, indent=2)
+        except IOError:
+            pass
+
+    def mark_email_sent(self, date: str) -> None:
+        """Record that the email was sent for *date* (YYYY-MM-DD)."""
+        if self._client is not None:
+            try:
+                self._client.table(self.TABLE).upsert(
+                    {"date": date, "email_sent_date": date}, on_conflict="date"
+                ).execute()
+                return
+            except Exception as exc:
+                logger.warning("Supabase mark_email_sent failed (%s) — using file fallback", exc)
+
+        # File fallback — patch existing file in-place
+        try:
+            existing: Dict[str, Any] = {}
+            state_path = Path(STATE_FILENAME)
+            if state_path.exists():
+                with open(state_path) as f:
+                    existing = json.load(f)
+            existing["email_sent_date"] = date
+            with open(STATE_FILENAME, "w") as f:
+                json.dump(existing, f, indent=2)
+        except (json.JSONDecodeError, IOError):
+            pass
+
+    def email_sent_today(self, today: str) -> bool:
+        """Return True if an email was already sent for *today*."""
+        if self._client is not None:
+            try:
+                resp = (
+                    self._client.table(self.TABLE)
+                    .select("email_sent_date")
+                    .eq("date", today)
+                    .limit(1)
+                    .execute()
+                )
+                rows = resp.data
+                if rows and rows[0].get("email_sent_date") == today:
+                    return True
+                return False
+            except Exception as exc:
+                logger.warning("Supabase email_sent_today failed (%s) — using file fallback", exc)
+
+        # File fallback
+        try:
+            state_path = Path(STATE_FILENAME)
+            if state_path.exists():
+                with open(state_path) as f:
+                    return json.load(f).get("email_sent_date") == today
+        except (json.JSONDecodeError, IOError):
+            pass
+        return False
+
+    # ------------------------------------------------------------------
+    # Internal helpers
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _from_row(row: Dict[str, Any]) -> Dict[str, Any]:
+        """Normalise a Supabase row back to the legacy state dict shape."""
+        out = dict(row)
+        # email_sent_date may be a date object from the driver — coerce to str
+        if out.get("email_sent_date") and not isinstance(out["email_sent_date"], str):
+            out["email_sent_date"] = str(out["email_sent_date"])
+        return out
+
+
 class BriefingCoordinator:
     """
     Coordinator for v0.2 multi-agent briefing generation.
@@ -78,6 +245,9 @@ class BriefingCoordinator:
 
         # Podcast
         self.podcast_generator = PodcastGenerator(config.get("podcast", {}))
+
+        # State store (Supabase-backed, file fallback)
+        self._state_store = _SupabaseStateStore()
 
         # OTel tracing
         setup_tracing(config)
@@ -788,17 +958,10 @@ class BriefingCoordinator:
 
         # Guard against duplicate sends on K8s job retry
         today = datetime.now().strftime("%Y-%m-%d")
-        state_path = Path(STATE_FILENAME)
-        if state_path.exists():
-            try:
-                with open(state_path) as f:
-                    _state = json.load(f)
-                if _state.get("email_sent_date") == today:
-                    logger.warning(f"Email already sent today ({today}), skipping duplicate send")
-                    self.status["email_sent"] = True
-                    return {}
-            except (json.JSONDecodeError, IOError):
-                pass
+        if self._state_store.email_sent_today(today):
+            logger.warning(f"Email already sent today ({today}), skipping duplicate send")
+            self.status["email_sent"] = True
+            return {}
 
         try:
             distributor = EmailDistributor(sender_email=sender_email, sender_password=sender_password)
@@ -813,16 +976,7 @@ class BriefingCoordinator:
 
             # Persist sent date immediately so retries don't re-send
             if sent > 0:
-                try:
-                    existing: Dict[str, Any] = {}
-                    if state_path.exists():
-                        with open(state_path) as f:
-                            existing = json.load(f)
-                    existing["email_sent_date"] = today
-                    with open(state_path, "w") as f:
-                        json.dump(existing, f, indent=2)
-                except (json.JSONDecodeError, IOError):
-                    pass
+                self._state_store.mark_email_sent(today)
 
             return results
         except Exception as e:
@@ -905,19 +1059,11 @@ class BriefingCoordinator:
         }
         return file_naming.format_map(known_vars)
 
-    @staticmethod
-    def _load_previous_state() -> Dict[str, Any]:
-        state_path = Path(STATE_FILENAME)
-        if state_path.exists():
-            try:
-                with open(state_path) as f:
-                    return json.load(f)
-            except (json.JSONDecodeError, IOError):
-                return {}
-        return {}
+    def _load_previous_state(self) -> Dict[str, Any]:
+        return self._state_store.load()
 
-    @staticmethod
     def _save_state(
+        self,
         papers: List[Dict[str, Any]],
         blogs: List[Dict[str, Any]],
         news: List[Dict[str, Any]],
@@ -927,27 +1073,16 @@ class BriefingCoordinator:
         weekly_items: Optional[List[Dict[str, Any]]] = None,
         github_trending: Optional[List[Dict[str, Any]]] = None,
     ) -> None:
-        state = {
-            "date": datetime.now().strftime("%Y-%m-%d"),
-            "top_paper_titles": [p.get("title", "") for p in papers[:10]],
-            "top_blog_titles": [b.get("title", "") for b in blogs[:10]],
-            "top_news_titles": [n.get("title", "") for n in news[:10]],
-            "top_github_titles": [r.get("title", "") for r in (github_trending or [])[:20]],
-            "stock_closes": {
-                s.get("symbol", ""): s.get("current_price", 0)
-                for s in stocks if "error" not in s
-            },
-            "emerging_themes": emerging_themes,
-        }
-        if trending_topics is not None:
-            state["trending_topics"] = trending_topics
-        if weekly_items is not None:
-            state["weekly_items"] = weekly_items
-        try:
-            with open(STATE_FILENAME, "w") as f:
-                json.dump(state, f, indent=2)
-        except IOError:
-            pass
+        self._state_store.save(
+            papers=papers,
+            blogs=blogs,
+            news=news,
+            stocks=stocks,
+            emerging_themes=emerging_themes,
+            trending_topics=trending_topics,
+            weekly_items=weekly_items,
+            github_trending=github_trending,
+        )
 
     def save_status(self, output_dir: str = ".") -> None:
         self.status["errors"] = self.errors
