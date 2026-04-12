@@ -1301,8 +1301,27 @@ def main() -> int:
             logger.error(f"Invalid --date format '{args.date}': expected YYYY-MM-DD")
             return 2
 
-    coordinator = BriefingCoordinator(config=config, dry_run=args.dry_run, run_date=run_date)
-    return coordinator.run()
+    max_retries = config.get("max_retries", 2)
+    retry_backoffs = [30, 120]  # seconds between attempts
+
+    for attempt in range(max_retries + 1):
+        coordinator = BriefingCoordinator(config=config, dry_run=args.dry_run, run_date=run_date)
+        result = coordinator.run()
+        if result == 0:
+            return 0
+        if result == 2:
+            # Fatal config/data error — don't retry
+            return 2
+        if attempt < max_retries:
+            wait = retry_backoffs[min(attempt, len(retry_backoffs) - 1)]
+            logger.warning(
+                "Attempt %d/%d failed (exit %d) — retrying in %ds",
+                attempt + 1, max_retries + 1, result, wait,
+            )
+            time.sleep(wait)
+
+    logger.error("All %d attempt(s) failed", max_retries + 1)
+    return result
 
 
 if __name__ == "__main__":
