@@ -1128,6 +1128,10 @@ class BriefingCoordinator:
             # --- Spawn all workers in parallel ---
             with self._tracer.start_as_current_span("personal.fetch") as fetch_span:
                 fetch_span.set_attribute("langfuse.observation.type", "span")
+                fetch_span.set_attribute("langfuse.observation.input", json.dumps({
+                    "topics": topics[:5],
+                    "workers": ["papers_worker", "blogs_worker", "news_market_worker", "gmail_worker", "github_trending_worker"],
+                }))
                 logger.info("=== Spawning parallel workers ===")
                 findings = self._spawn_workers()
                 fetch_span.set_attribute("langfuse.observation.output", json.dumps({
@@ -1270,6 +1274,12 @@ class BriefingCoordinator:
             if self.intelligence.available:
                 with self._tracer.start_as_current_span("personal.synthesize") as synth_span:
                     synth_span.set_attribute("langfuse.observation.type", "span")
+                    synth_span.set_attribute("langfuse.observation.input", json.dumps({
+                        "top_papers": len(top_papers),
+                        "news": len(news),
+                        "blogs": len(blogs),
+                        "newsletters": len(newsletters),
+                    }))
                     top_papers = self.intelligence.assess_reproduction_feasibility(top_papers)
                     top_papers = self._ensure_paper_summaries(top_papers[:3]) + top_papers[3:]
 
@@ -1322,6 +1332,13 @@ class BriefingCoordinator:
             podcast_url: Optional[str] = None
             with self._tracer.start_as_current_span("personal.render") as render_span:
                 render_span.set_attribute("langfuse.observation.type", "span")
+                render_span.set_attribute("langfuse.observation.input", json.dumps({
+                    "papers": len(papers),
+                    "blogs": len(blogs),
+                    "news": len(news),
+                    "newsletters": len(newsletters),
+                    "github_trending": len(github_trending),
+                }))
                 filename = self._format_filename(now)
                 markdown_content = self.generate_markdown_briefing(
                     papers, blogs, stocks, news, top_papers, synthesis,
@@ -1333,6 +1350,9 @@ class BriefingCoordinator:
                 with self._tracer.start_as_current_span("personal.podcast") as podcast_span:
                     podcast_span.set_attribute("langfuse.observation.type", "span")
                     podcast_span.set_attribute("podcast.enabled", str(self.podcast_generator.enabled))
+                    if not self.podcast_generator.enabled:
+                        podcast_span.set_attribute("langfuse.observation.input", json.dumps({"enabled": False}))
+                        podcast_span.set_attribute("langfuse.observation.output", "skipped — podcast disabled in config")
                     if self.podcast_generator.enabled:
                         _max_top = self._get_limit("max_top_papers_render", 3)
                         _rendered_top = sorted(
