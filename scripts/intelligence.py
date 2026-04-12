@@ -768,7 +768,7 @@ class BriefingIntelligence:
             return items[:10] if items else []
 
         lines = []
-        for i, item in enumerate(items[:15], 1):
+        for i, item in enumerate(items[:30], 1):
             title = _sanitize_prompt_input(
                 item.get("title") or item.get("name") or "", max_length=150
             )
@@ -800,7 +800,7 @@ class BriefingIntelligence:
         )
 
         result = self.bedrock.invoke(
-            prompt, tier="light", max_tokens=600,
+            prompt, tier="light", max_tokens=1200,
             system_prompt=SYSTEM_PROMPT, name="rank_source_links",
         )
         if not result:
@@ -818,7 +818,7 @@ class BriefingIntelligence:
 
         diversified = self._enforce_source_diversity(
             sorted(scored, key=lambda x: x.get("score_combined", 0), reverse=True),
-            max_per_source=3,
+            max_per_source=5,
         )
         logger.info(f"Ranked {len(diversified)} source links")
         return diversified[:10]

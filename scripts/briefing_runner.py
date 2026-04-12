@@ -233,23 +233,33 @@ class BriefingCoordinator:
         blogs: List[Dict[str, Any]],
         news: List[Dict[str, Any]],
         previous_state: Dict[str, Any],
+        github_trending: Optional[List[Dict[str, Any]]] = None,
     ) -> tuple:
         """Remove items that appeared in yesterday's briefing."""
         if not previous_state:
+            if github_trending is not None:
+                return papers, blogs, news, github_trending
             return papers, blogs, news
         prev_papers = {t.lower() for t in previous_state.get("top_paper_titles", [])}
         prev_blogs = {t.lower() for t in previous_state.get("top_blog_titles", [])}
         prev_news = {t.lower() for t in previous_state.get("top_news_titles", [])}
+        prev_github = {t.lower() for t in previous_state.get("top_github_titles", [])}
 
-        def _filter(items, prev):
+        def _filter(items, prev, key="title"):
             before = len(items)
-            out = [i for i in items if i.get("title", "").lower() not in prev]
+            out = [i for i in items if i.get(key, "").lower() not in prev]
             removed = before - len(out)
             if removed:
                 logger.info(f"Cross-day dedup: removed {removed} items seen yesterday")
             return out
 
-        return _filter(papers, prev_papers), _filter(blogs, prev_blogs), _filter(news, prev_news)
+        filtered_papers = _filter(papers, prev_papers)
+        filtered_blogs = _filter(blogs, prev_blogs)
+        filtered_news = _filter(news, prev_news)
+        if github_trending is not None:
+            filtered_github = _filter(github_trending, prev_github)
+            return filtered_papers, filtered_blogs, filtered_news, filtered_github
+        return filtered_papers, filtered_blogs, filtered_news
 
     # ------------------------------------------------------------------
     # Community picks builder
@@ -286,16 +296,35 @@ class BriefingCoordinator:
     ) -> List[Dict[str, Any]]:
         """Merge newsletter-extracted links and GitHub trending repos."""
         picks: List[Dict[str, Any]] = []
+        seen_urls: set = set()
         for nl in newsletters:
-            text = (nl.get("snippet") or "") + " " + (nl.get("summary") or "")
-            for url in BriefingCoordinator._extract_urls_from_text(text):
-                picks.append({
-                    "url": url,
-                    "title": nl.get("title", "Newsletter article"),
-                    "source": nl.get("source", "Newsletter"),
-                    "summary": "",
-                    "source_type": "newsletter",
-                })
+            source = nl.get("source", "Newsletter")
+            # Prefer structured (url, title) pairs extracted from HTML
+            links: List = nl.get("links") or []
+            if links:
+                for url, title in links:
+                    if url not in seen_urls:
+                        seen_urls.add(url)
+                        picks.append({
+                            "url": url,
+                            "title": title,
+                            "source": source,
+                            "summary": "",
+                            "source_type": "newsletter",
+                        })
+            else:
+                # Fallback: extract URLs from plain text snippet
+                text = (nl.get("snippet") or "") + " " + (nl.get("summary") or "")
+                for url in BriefingCoordinator._extract_urls_from_text(text):
+                    if url not in seen_urls:
+                        seen_urls.add(url)
+                        picks.append({
+                            "url": url,
+                            "title": nl.get("title", "Newsletter article"),
+                            "source": source,
+                            "summary": "",
+                            "source_type": "newsletter",
+                        })
         for repo in github_trending:
             if repo.get("link"):
                 picks.append({
@@ -756,6 +785,21 @@ class BriefingCoordinator:
         if not sender_email or not sender_password:
             logger.warning("Gmail credentials not set, skipping distribution")
             return {}
+
+        # Guard against duplicate sends on K8s job retry
+        today = datetime.now().strftime("%Y-%m-%d")
+        state_path = Path(STATE_FILENAME)
+        if state_path.exists():
+            try:
+                with open(state_path) as f:
+                    _state = json.load(f)
+                if _state.get("email_sent_date") == today:
+                    logger.warning(f"Email already sent today ({today}), skipping duplicate send")
+                    self.status["email_sent"] = True
+                    return {}
+            except (json.JSONDecodeError, IOError):
+                pass
+
         try:
             distributor = EmailDistributor(sender_email=sender_email, sender_password=sender_password)
             results = distributor.distribute(
@@ -766,6 +810,20 @@ class BriefingCoordinator:
             self.status["email_sent"] = sent > 0
             self.status["distribution"] = {"sent": sent, "total": len(results), "details": results}
             logger.info(f"Distribution: {sent}/{len(results)} channels delivered")
+
+            # Persist sent date immediately so retries don't re-send
+            if sent > 0:
+                try:
+                    existing: Dict[str, Any] = {}
+                    if state_path.exists():
+                        with open(state_path) as f:
+                            existing = json.load(f)
+                    existing["email_sent_date"] = today
+                    with open(state_path, "w") as f:
+                        json.dump(existing, f, indent=2)
+                except (json.JSONDecodeError, IOError):
+                    pass
+
             return results
         except Exception as e:
             logger.error(f"Distribution failed: {e}")
@@ -867,12 +925,14 @@ class BriefingCoordinator:
         emerging_themes: List[str],
         trending_topics: Optional[Dict[str, Any]] = None,
         weekly_items: Optional[List[Dict[str, Any]]] = None,
+        github_trending: Optional[List[Dict[str, Any]]] = None,
     ) -> None:
         state = {
             "date": datetime.now().strftime("%Y-%m-%d"),
             "top_paper_titles": [p.get("title", "") for p in papers[:10]],
             "top_blog_titles": [b.get("title", "") for b in blogs[:10]],
             "top_news_titles": [n.get("title", "") for n in news[:10]],
+            "top_github_titles": [r.get("title", "") for r in (github_trending or [])[:20]],
             "stock_closes": {
                 s.get("symbol", ""): s.get("current_price", 0)
                 for s in stocks if "error" not in s
@@ -976,7 +1036,9 @@ class BriefingCoordinator:
             # --- Deduplication ---
             news, blogs = self.deduplicate_news_and_blogs(news, blogs)
             papers = self.deduplicate_similar_papers(papers)
-            papers, blogs, news = self._dedup_against_previous(papers, blogs, news, previous_state)
+            papers, blogs, news, github_trending = self._dedup_against_previous(
+                papers, blogs, news, previous_state, github_trending
+            )
 
             # --- Build community picks ---
             community_picks = self._build_community_picks(newsletters, github_trending)
@@ -1188,6 +1250,7 @@ class BriefingCoordinator:
             top_papers, blogs, news, stocks, emerging_themes,
             trending_topics=previous_state.get("trending_topics", {}),
             weekly_items=weekly_items,
+            github_trending=github_trending,
         )
 
         # Finalize

@@ -15,7 +15,8 @@ import logging
 import os
 import re
 from email.header import decode_header, make_header
-from typing import Any, Dict, List, Optional
+from html.parser import HTMLParser
+from typing import Any, Dict, List, Optional, Tuple
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 logger = logging.getLogger(__name__)
@@ -23,6 +24,13 @@ logger = logging.getLogger(__name__)
 _IMAP_HOST = "imap.gmail.com"
 _IMAP_PORT = 993
 _SNIPPET_MAX = 500
+
+_LINK_NOISE = re.compile(
+    r'(unsubscribe|track|pixel|click\.|utm_|mailto:|/login|/signin'
+    r'|twitter\.com|x\.com|t\.co|linkedin\.com|facebook\.com|instagram\.com'
+    r'|view.*browser|email.*client|manage.*pref)',
+    re.IGNORECASE,
+)
 
 
 def _strip_html(text: str) -> str:
@@ -37,6 +45,50 @@ def _decode_header_str(value: Optional[str]) -> str:
     if not value:
         return ""
     return str(make_header(decode_header(value)))
+
+
+class _LinkExtractor(HTMLParser):
+    """Extract (url, link_text) pairs from HTML, skipping noise links."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self._current_href: Optional[str] = None
+        self._current_text: List[str] = []
+        self.links: List[Tuple[str, str]] = []
+        self._seen: set = set()
+
+    def handle_starttag(self, tag: str, attrs: List) -> None:
+        if tag == "a":
+            attr = dict(attrs)
+            href = attr.get("href", "").strip()
+            if href.startswith("http") and not _LINK_NOISE.search(href) and len(href) >= 20:
+                self._current_href = href
+                self._current_text = []
+
+    def handle_endtag(self, tag: str) -> None:
+        if tag == "a" and self._current_href:
+            text = " ".join(self._current_text).strip()
+            text = re.sub(r"\s+", " ", html.unescape(text)).strip()
+            url = self._current_href
+            if url not in self._seen and text and len(text) > 5:
+                self._seen.add(url)
+                self.links.append((url, text))
+            self._current_href = None
+            self._current_text = []
+
+    def handle_data(self, data: str) -> None:
+        if self._current_href:
+            self._current_text.append(data)
+
+
+def _extract_links_from_html(raw_html: str) -> List[Tuple[str, str]]:
+    """Extract (url, title) pairs from newsletter HTML, filtering noise."""
+    parser = _LinkExtractor()
+    try:
+        parser.feed(raw_html)
+    except Exception:
+        pass
+    return parser.links
 
 
 def _extract_body(msg: email.message.Message) -> str:
@@ -66,6 +118,20 @@ def _extract_body(msg: email.message.Message) -> str:
             except Exception:
                 pass
 
+    return ""
+
+
+def _extract_html_part(msg: email.message.Message) -> str:
+    """Return raw HTML body from the email, if present."""
+    for part in msg.walk():
+        if part.get_content_type() == "text/html" and "attachment" not in part.get(
+            "Content-Disposition", ""
+        ):
+            charset = part.get_content_charset() or "utf-8"
+            try:
+                return part.get_payload(decode=True).decode(charset, errors="replace")
+            except Exception:
+                pass
     return ""
 
 
@@ -148,6 +214,10 @@ class GmailScanner:
                     body = _extract_body(msg)
                     snippet = body[: _SNIPPET_MAX].strip()
 
+                    # Extract (url, title) pairs from HTML for community picks
+                    raw_html = _extract_html_part(msg)
+                    links = _extract_links_from_html(raw_html) if raw_html else []
+
                     self._fetched_nums.append(num)
                     items.append(
                         {
@@ -156,6 +226,7 @@ class GmailScanner:
                             "link": "",
                             "summary": "",
                             "snippet": snippet,
+                            "links": links,
                             "published": date_str,
                             "category": "",
                         }
