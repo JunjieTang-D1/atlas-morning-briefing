@@ -5,6 +5,7 @@ Base worker class for v0.2 multi-agent architecture.
 Each worker is self-contained and reports findings in a structured format.
 """
 
+import json
 import time
 from abc import ABC, abstractmethod
 from datetime import datetime
@@ -48,6 +49,11 @@ class BaseWorker(ABC):
             span.set_attribute("worker.items_found", finding["metadata"].get("items_found", 0))
             if finding.get("error"):
                 span.set_status(trace.StatusCode.ERROR, finding["error"])
+            span.set_attribute("langfuse.observation.output", json.dumps({
+                "status": finding.get("status", ""),
+                "items_found": finding["metadata"].get("items_found", 0),
+                "synthesis": (finding.get("synthesis") or "")[:200],
+            }))
             return finding
 
     @abstractmethod

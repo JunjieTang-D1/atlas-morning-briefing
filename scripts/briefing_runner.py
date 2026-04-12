@@ -1110,6 +1110,11 @@ class BriefingCoordinator:
         with self._tracer.start_as_current_span("personal.briefing.run") as root_span:
             root_span.set_attribute("briefing.date", today_str)
             root_span.set_attribute("briefing.dry_run", self.dry_run)
+            root_span.set_attribute("langfuse.observation.input", json.dumps({
+                "date": today_str,
+                "topics": self.config.get("arxiv_topics", [])[:5],
+                "dry_run": self.dry_run,
+            }))
 
             # Load previous state
             previous_state = self._load_previous_state()
@@ -1121,9 +1126,13 @@ class BriefingCoordinator:
                 topics = self.intelligence.expand_topics(topics)
 
             # --- Spawn all workers in parallel ---
-            with self._tracer.start_as_current_span("personal.fetch"):
+            with self._tracer.start_as_current_span("personal.fetch") as fetch_span:
                 logger.info("=== Spawning parallel workers ===")
                 findings = self._spawn_workers()
+                fetch_span.set_attribute("langfuse.observation.output", json.dumps({
+                    w["worker"]: {"status": w["status"], "items": w["metadata"].get("items_found", 0)}
+                    for w in findings
+                }))
 
             # Check failures
             failed = [f for f in findings if f["status"] == "error"]
@@ -1153,7 +1162,12 @@ class BriefingCoordinator:
                     previous_state, news_queries
                 )
 
-            with self._tracer.start_as_current_span("personal.fetch.news"):
+            with self._tracer.start_as_current_span("personal.fetch.news") as fetch_news_span:
+                fetch_news_span.set_attribute("langfuse.observation.input", json.dumps({
+                    "queries": news_queries[:3],
+                    "query_count": len(news_queries),
+                }))
+                news_count_before = len(news)
                 api_key = os.environ.get("BRAVE_API_KEY")
                 if api_key and news_queries:
                     try:
@@ -1167,6 +1181,10 @@ class BriefingCoordinator:
                     except Exception as e:
                         logger.error(f"News aggregation failed: {e}")
                         self.errors.append(f"News aggregation: {e}")
+                fetch_news_span.set_attribute("langfuse.observation.output", json.dumps({
+                    "extra_news": len(news) - news_count_before,
+                    "total_news": len(news),
+                }))
 
             # --- Deduplication ---
             news, blogs = self.deduplicate_news_and_blogs(news, blogs)
@@ -1186,7 +1204,12 @@ class BriefingCoordinator:
             synthesis: Dict[str, Any] = {}
             emerging_themes: List[str] = []
             if self.intelligence.available:
-                with self._tracer.start_as_current_span("personal.enrich"):
+                with self._tracer.start_as_current_span("personal.enrich") as enrich_span:
+                    enrich_span.set_attribute("langfuse.observation.input", json.dumps({
+                        "papers": len(papers),
+                        "blogs": len(blogs),
+                        "news": len(news),
+                    }))
                     logger.info("=== Intelligence: Enriching ===")
 
                     # Relevance filter
@@ -1221,6 +1244,11 @@ class BriefingCoordinator:
                         papers, blogs, news, previous_state, newsletters, github_trending,
                     )
 
+                    enrich_span.set_attribute("langfuse.observation.output", json.dumps({
+                        "papers_after": len(papers),
+                        "themes": emerging_themes[:5],
+                    }))
+
             # Market trend
             market_trend = ""
             if self.intelligence.available and stocks:
@@ -1237,7 +1265,7 @@ class BriefingCoordinator:
 
             # Synthesis
             if self.intelligence.available:
-                with self._tracer.start_as_current_span("personal.synthesize"):
+                with self._tracer.start_as_current_span("personal.synthesize") as synth_span:
                     top_papers = self.intelligence.assess_reproduction_feasibility(top_papers)
                     top_papers = self._ensure_paper_summaries(top_papers[:3]) + top_papers[3:]
 
@@ -1261,6 +1289,11 @@ class BriefingCoordinator:
                         )
                         synthesis["entity_mentions"] = entity_mentions
 
+                    synth_span.set_attribute("langfuse.observation.output", json.dumps({
+                        "top_papers": len(top_papers),
+                        "synthesis_keys": list(synthesis.keys())[:5] if synthesis else [],
+                    }))
+
             # Weekly deep dive (Saturday)
             is_saturday = now.weekday() == 5
             weekly_deep_dive = ""
@@ -1283,7 +1316,7 @@ class BriefingCoordinator:
                 return 2
 
             podcast_url: Optional[str] = None
-            with self._tracer.start_as_current_span("personal.render"):
+            with self._tracer.start_as_current_span("personal.render") as render_span:
                 filename = self._format_filename(now)
                 markdown_content = self.generate_markdown_briefing(
                     papers, blogs, stocks, news, top_papers, synthesis,
@@ -1291,51 +1324,58 @@ class BriefingCoordinator:
                     newsletters=newsletters, community_picks=community_picks,
                 )
 
-                # Podcast
-                if self.podcast_generator.enabled:
-                    _max_top = self._get_limit("max_top_papers_render", 3)
-                    _rendered_top = sorted(
-                        top_papers[:_max_top],
-                        key=lambda x: x.get("score_combined", 0), reverse=True,
-                    )
-                    if any(p.get("score_combined") for p in _rendered_top):
-                        _rendered_top = [p for p in _rendered_top if p.get("score_combined", 0) >= 3]
+                # Podcast (child span inside render so markdown_content is available)
+                with self._tracer.start_as_current_span("personal.podcast") as podcast_span:
+                    podcast_span.set_attribute("podcast.enabled", str(self.podcast_generator.enabled))
+                    if self.podcast_generator.enabled:
+                        _max_top = self._get_limit("max_top_papers_render", 3)
+                        _rendered_top = sorted(
+                            top_papers[:_max_top],
+                            key=lambda x: x.get("score_combined", 0), reverse=True,
+                        )
+                        if any(p.get("score_combined") for p in _rendered_top):
+                            _rendered_top = [p for p in _rendered_top if p.get("score_combined", 0) >= 3]
 
-                    _max_blogs = self._get_limit("max_blogs_render", 5)
-                    _rendered_blogs = sorted(
-                        blogs[:_max_blogs],
-                        key=lambda x: x.get("score_combined", 0), reverse=True,
-                    )
-                    if any(b.get("score_combined") for b in _rendered_blogs):
-                        _rendered_blogs = [b for b in _rendered_blogs if b.get("score_combined", 0) >= 3]
+                        _max_blogs = self._get_limit("max_blogs_render", 5)
+                        _rendered_blogs = sorted(
+                            blogs[:_max_blogs],
+                            key=lambda x: x.get("score_combined", 0), reverse=True,
+                        )
+                        if any(b.get("score_combined") for b in _rendered_blogs):
+                            _rendered_blogs = [b for b in _rendered_blogs if b.get("score_combined", 0) >= 3]
 
-                    _max_news = self._get_limit("max_news_render", 5)
-                    _max_community = self._get_limit("max_community_picks", 8)
-                    _rendered_community = sorted(
-                        community_picks,
-                        key=lambda x: x.get("score_combined", 0), reverse=True,
-                    )
-                    if any(c.get("score_combined") for c in _rendered_community):
-                        _rendered_community = [c for c in _rendered_community if c.get("score_combined", 0) >= 3]
-                    _rendered_community = _rendered_community[:_max_community]
+                        _max_news = self._get_limit("max_news_render", 5)
+                        _max_community = self._get_limit("max_community_picks", 8)
+                        _rendered_community = sorted(
+                            community_picks,
+                            key=lambda x: x.get("score_combined", 0), reverse=True,
+                        )
+                        if any(c.get("score_combined") for c in _rendered_community):
+                            _rendered_community = [c for c in _rendered_community if c.get("score_combined", 0) >= 3]
+                        _rendered_community = _rendered_community[:_max_community]
 
-                    source_urls = (
-                        [p.get("url") or p.get("arxiv_url") for p in _rendered_top
-                         if p.get("url") or p.get("arxiv_url")]
-                        + [b["link"] for b in _rendered_blogs if b.get("link")]
-                        + [n["url"] for n in news[:_max_news] if n.get("url")]
-                        + [c.get("url") or c.get("link") for c in _rendered_community
-                           if c.get("url") or c.get("link")]
-                    )[:10]
+                        source_urls = (
+                            [p.get("url") or p.get("arxiv_url") for p in _rendered_top
+                             if p.get("url") or p.get("arxiv_url")]
+                            + [b["link"] for b in _rendered_blogs if b.get("link")]
+                            + [n["url"] for n in news[:_max_news] if n.get("url")]
+                            + [c.get("url") or c.get("link") for c in _rendered_community
+                               if c.get("url") or c.get("link")]
+                        )[:10]
 
-                    podcast_url = self.podcast_generator.generate(markdown_content, now, source_urls)
-                    if podcast_url:
-                        markdown_content = self._inject_podcast_section(markdown_content, podcast_url)
-                        self.status["podcast_url"] = podcast_url
-                        logger.info(f"Podcast URL injected: {podcast_url}")
-                    elif self.podcast_generator.enabled:
-                        self.status["podcast_error"] = "failed — check logs (possible auth expiry)"
-                        logger.warning("Podcast generation failed — briefing continues without podcast link")
+                        podcast_span.set_attribute("langfuse.observation.input", json.dumps({
+                            "source_urls_count": len(source_urls),
+                        }))
+                        podcast_url = self.podcast_generator.generate(markdown_content, now, source_urls)
+                        if podcast_url:
+                            markdown_content = self._inject_podcast_section(markdown_content, podcast_url)
+                            self.status["podcast_url"] = podcast_url
+                            logger.info(f"Podcast URL injected: {podcast_url}")
+                            podcast_span.set_attribute("langfuse.observation.output", podcast_url)
+                        else:
+                            self.status["podcast_error"] = "failed — check logs (possible auth expiry)"
+                            logger.warning("Podcast generation failed — briefing continues without podcast link")
+                            podcast_span.set_attribute("langfuse.observation.output", "failed — geo-blocked or auth expired")
 
                 # Save markdown
                 md_path = f"{filename}.md"
@@ -1357,7 +1397,21 @@ class BriefingCoordinator:
                         root_span.set_status(trace.StatusCode.ERROR, "PDF generation failed")
                         return 2
 
+                render_span.set_attribute("langfuse.observation.output", json.dumps({
+                    "markdown": md_path,
+                    "pdf": pdf_path or "none",
+                }))
+
             # Distribute
+            root_span.set_attribute("langfuse.observation.output", json.dumps({
+                "papers": len(papers),
+                "blogs": len(blogs),
+                "news": len(news),
+                "newsletters": len(newsletters),
+                "github_trending": len(github_trending),
+                "podcast": podcast_url or "none",
+                "errors": len(self.errors),
+            }))
             self.distribute_briefing(markdown_content, pdf_path, filename)
 
         # Obsidian (outside root span — independent side-effect)

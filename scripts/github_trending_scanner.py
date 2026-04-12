@@ -6,6 +6,7 @@ Scrapes github.com/trending directly and returns the daily trending repos
 as briefing source items. No API key or external service required.
 """
 
+import http.client
 import logging
 from html.parser import HTMLParser
 from typing import Any, Dict, List
@@ -120,8 +121,12 @@ class GitHubTrendingScanner:
         """
         try:
             req = Request(_TRENDING_URL, headers={"User-Agent": _USER_AGENT})
-            with urlopen(req, timeout=30) as resp:
-                html = resp.read().decode("utf-8", errors="replace")
+            try:
+                with urlopen(req, timeout=30) as resp:
+                    html = resp.read().decode("utf-8", errors="replace")
+            except http.client.IncompleteRead as e:
+                logger.warning(f"GitHub trending: IncompleteRead ({len(e.partial)} bytes) — using partial data")
+                html = e.partial.decode("utf-8", errors="replace")
         except URLError as e:
             logger.error(f"Failed to fetch GitHub trending: {e}")
             return []
