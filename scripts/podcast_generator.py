@@ -19,11 +19,19 @@ import base64
 import logging
 import os
 import tempfile
+import time
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
+
+_RETRY_BACKOFFS = [15, 45]  # seconds between attempts 1→2 and 2→3
+
+
+class _RetryableError(Exception):
+    """Transient NotebookLM failure — safe to retry after backoff."""
+
 
 try:
     from notebooklm import NotebookLMClient
@@ -131,7 +139,38 @@ class PodcastGenerator:
         if not HAS_NOTEBOOKLM:
             logger.warning("notebooklm-py not installed; skipping podcast generation")
             return None
-        return asyncio.run(self._generate_async(briefing_markdown, date, source_urls or []))
+
+        max_attempts = len(_RETRY_BACKOFFS) + 1
+        for attempt in range(max_attempts):
+            try:
+                result = asyncio.run(
+                    self._generate_async(briefing_markdown, date, source_urls or [])
+                )
+                if result is not None:
+                    return result
+                # _generate_async returned None for a permanent/known failure;
+                # no point retrying.
+                return None
+            except _RetryableError as exc:
+                if attempt < max_attempts - 1:
+                    wait = _RETRY_BACKOFFS[attempt]
+                    logger.warning(
+                        "NotebookLM transient error (attempt %d/%d): %s — retrying in %ds",
+                        attempt + 1, max_attempts, exc, wait,
+                    )
+                    time.sleep(wait)
+                else:
+                    logger.warning(
+                        "NotebookLM failed after %d attempts: %s — skipping podcast",
+                        max_attempts, exc,
+                    )
+        return None
+
+    @staticmethod
+    def _is_geo_blocked(exc: BaseException) -> bool:
+        """Return True if the error is a permanent geo-restriction (not retryable)."""
+        msg = str(exc).lower()
+        return "location=unsupported" in msg or "location unsupported" in msg
 
     @staticmethod
     def _is_auth_error(exc: BaseException) -> bool:
@@ -228,6 +267,7 @@ class PodcastGenerator:
                     return share_url
 
                 except Exception as e:
+                    is_permanent = self._is_auth_error(e) or self._is_geo_blocked(e)
                     if self._is_auth_error(e):
                         logger.error(
                             "NotebookLM auth error — Google session has expired or been revoked. "
@@ -237,16 +277,22 @@ class PodcastGenerator:
                             "(/providers/ai/google). Podcast skipped for today.",
                             getattr(getattr(e, "response", None), "status_code", "4xx"),
                         )
+                    elif self._is_geo_blocked(e):
+                        logger.warning(
+                            "NotebookLM geo-blocked inside notebook op — skipping podcast."
+                        )
                     else:
                         logger.warning(f"NotebookLM podcast setup failed: {e}")
-                    # Clean up notebook only if we never obtained a usable URL
+                    # Clean up partial notebook
                     if notebook_id:
                         try:
                             await client.notebooks.delete(notebook_id)
                             logger.debug(f"Deleted notebook after failed setup: {notebook_id}")
                         except Exception:
                             pass
-                    return None
+                    if is_permanent:
+                        return None
+                    raise _RetryableError(e) from e
 
         except Exception as e:
             if self._is_auth_error(e):
@@ -258,9 +304,16 @@ class PodcastGenerator:
                     "(/providers/ai/google). Podcast skipped for today.",
                     getattr(getattr(e, "response", None), "status_code", "4xx"),
                 )
+                return None  # permanent — don't retry
+            elif self._is_geo_blocked(e):
+                logger.warning(
+                    "NotebookLM geo-blocked (location=unsupported) — "
+                    "the cluster region is not supported. Podcast skipped."
+                )
+                return None  # permanent — don't retry
             else:
                 logger.warning(f"NotebookLM client init failed: {e}")
-            return None
+                raise _RetryableError(e) from e  # transient — let caller retry
         finally:
             if tmp_storage_path and os.path.exists(tmp_storage_path):
                 os.unlink(tmp_storage_path)
