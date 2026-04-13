@@ -212,6 +212,14 @@ class PodcastGenerator:
             )
             return None
 
+        proxy_url = os.environ.get("NOTEBOOKLM_PROXY_URL")
+        old_https = os.environ.get("HTTPS_PROXY")
+        old_http = os.environ.get("HTTP_PROXY")
+        if proxy_url:
+            os.environ["HTTPS_PROXY"] = proxy_url
+            os.environ["HTTP_PROXY"] = proxy_url
+            logger.info("NotebookLM proxy: routing through %s", proxy_url.split("@")[-1])
+
         try:
             client = await NotebookLMClient.from_storage(storage_path)
             async with client:
@@ -315,5 +323,11 @@ class PodcastGenerator:
                 logger.warning(f"NotebookLM client init failed: {e}")
                 raise _RetryableError(e) from e  # transient — let caller retry
         finally:
+            if proxy_url:
+                for key, old in [("HTTPS_PROXY", old_https), ("HTTP_PROXY", old_http)]:
+                    if old is not None:
+                        os.environ[key] = old
+                    else:
+                        os.environ.pop(key, None)
             if tmp_storage_path and os.path.exists(tmp_storage_path):
                 os.unlink(tmp_storage_path)
