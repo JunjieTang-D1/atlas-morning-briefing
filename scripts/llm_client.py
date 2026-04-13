@@ -14,6 +14,7 @@ from typing import Any, Dict, Optional
 
 import requests
 from opentelemetry import trace
+from tenacity import retry, retry_if_exception, stop_after_attempt, wait_exponential
 from scripts.circuit_breaker import CircuitBreakerRegistry, CircuitOpenError
 
 _llm_tracer = trace.get_tracer("personal.llm")
@@ -32,9 +33,9 @@ class LLMClient:
     }
 
     DEFAULT_FALLBACK_MODELS = {
-        "heavy": "qwen/qwen3-next-80b-a3b-instruct:free",
-        "medium": "meta-llama/llama-3.3-70b-instruct:free",
-        "light": "google/gemma-4-31b-it:free",
+        "heavy": "nvidia/nemotron-3-super-120b-a12b:free",
+        "medium": "google/gemma-4-31b-it:free",
+        "light": "google/gemma-4-26b-a4b-it:free",
     }
 
     def __init__(self, config: Optional[Dict[str, Any]] = None):
@@ -219,11 +220,32 @@ class LLMClient:
             "messages": messages,
         }
 
+        def _is_5xx(exc: BaseException) -> bool:
+            return (
+                isinstance(exc, requests.HTTPError)
+                and exc.response is not None
+                and exc.response.status_code >= 500
+            )
+
         try:
             logger.info(f"Invoking MiniMax: {self._primary_model}")
             cb = CircuitBreakerRegistry.get("minimax-api", failure_threshold=3, recovery_timeout=120.0)
-            resp = cb.call(requests.post, url, headers=headers, json=body, timeout=120)
-            resp.raise_for_status()
+
+            @retry(
+                retry=retry_if_exception(_is_5xx),
+                stop=stop_after_attempt(3),
+                wait=wait_exponential(multiplier=1, min=2, max=8),
+                reraise=True,
+                before_sleep=lambda rs: logger.warning(
+                    f"MiniMax 5xx on attempt {rs.attempt_number}, retrying in {rs.next_action.sleep:.0f}s"
+                ),
+            )
+            def _post() -> requests.Response:
+                r = cb.call(requests.post, url, headers=headers, json=body, timeout=120)
+                r.raise_for_status()
+                return r
+
+            resp = _post()
             data = resp.json()
 
             if "error" in data:

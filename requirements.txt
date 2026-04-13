@@ -34,3 +34,6 @@ notebooklm-py>=0.3.0
 # Supabase state persistence
 supabase>=2.0.0
 
+# Retry with exponential backoff (used in LLM client for transient 5xx)
+tenacity>=8.2.0
+
