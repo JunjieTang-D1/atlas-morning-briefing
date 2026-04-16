@@ -739,10 +739,18 @@ class BriefingCoordinator:
             source = item.get("source", "")
             summary = item.get("summary", "")
             category = item.get("category", "")
+            link = item.get("link", "")
             category_tag = f" [{category}]" if category else ""
-            md.append(f"**{title}** *({source})*{category_tag}\n")
+            if link:
+                md.append(f"**[{title}]({link})** *({source})*{category_tag}\n")
+            else:
+                md.append(f"**{title}** *({source})*{category_tag}\n")
             if summary:
                 md.append(f"{summary}\n")
+            links = item.get("links", [])
+            if links:
+                for url, link_title in links[:5]:
+                    md.append(f"- [{link_title}]({url})\n")
             md.append("\n")
         return "".join(md)
 
@@ -1391,6 +1399,7 @@ class BriefingCoordinator:
 
                         podcast_span.set_attribute("langfuse.observation.input", json.dumps({
                             "source_urls_count": len(source_urls),
+                            "source_urls": source_urls,
                         }))
                         podcast_url = self.podcast_generator.generate(markdown_content, now, source_urls)
                         if podcast_url:
