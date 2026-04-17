@@ -141,13 +141,22 @@ obsidian:
 # Production (k8s): set NOTEBOOKLM_STORAGE_STATE_B64 (base64-encoded storage_state.json)
 podcast:
   enabled: false
-  audio_format: "brief"    # brief | deep-dive | critique | debate
-  audio_length: "short"    # short | default | long
-  include_paper_urls: true # add top paper URLs as NotebookLM sources for richer grounding
+  audio_format: "deep-dive" # brief | deep-dive | critique | debate
+  audio_length: "long"      # short (~5 min) | default (~10 min) | long (~20 min)
+  include_paper_urls: true  # add top paper URLs as NotebookLM sources for richer grounding
   instructions: >
-    Create a concise executive briefing podcast covering today's most important
-    AI research papers, news, and emerging trends. Focus on practical implications
-    and highlight the top 2-3 most significant developments.
+    Create a comprehensive daily AI practitioner briefing. Audience: advanced ML engineers.
+
+    Structure: (1) INTRO (30s) — state today's date and the single biggest story.
+    (2) TOP RESEARCH (3-4 min) — for each paper: name the specific finding, cite
+    key metrics/numbers, explain practical implication for practitioners.
+    (3) INDUSTRY NEWS (3-4 min) — group related items by theme; name companies and
+    people; explain what practitioners should watch or act on.
+    (4) COMMUNITY PICKS (2 min) — one key insight per highlighted article or blog post.
+    (5) CLOSING (1 min) — synthesize the top 3 takeaways to remember or act on.
+
+    Be specific: use names, numbers, and technical depth from the briefing.
+    Do not skim headlines — interpret significance and discuss substance.
   # storage_state_path: "~/.notebooklm/storage_state.json"  # override for local dev
 
 # File naming pattern

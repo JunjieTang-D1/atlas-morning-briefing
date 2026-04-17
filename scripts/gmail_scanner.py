@@ -32,6 +32,13 @@ _LINK_NOISE = re.compile(
     re.IGNORECASE,
 )
 
+_LINK_TEXT_NOISE = re.compile(
+    r'^(work with us|follow|subscribe|unsubscribe|view (in|online)|'
+    r'manage pref|privacy|terms|advertise|sponsor|forward|tweet|share|'
+    r'read online|contact us|become a member|refer a friend)',
+    re.IGNORECASE,
+)
+
 
 def _strip_html(text: str) -> str:
     """Remove HTML tags and decode entities."""
@@ -70,7 +77,7 @@ class _LinkExtractor(HTMLParser):
             text = " ".join(self._current_text).strip()
             text = re.sub(r"\s+", " ", html.unescape(text)).strip()
             url = self._current_href
-            if url not in self._seen and text and len(text) > 5:
+            if url not in self._seen and text and len(text) > 5 and not _LINK_TEXT_NOISE.search(text):
                 self._seen.add(url)
                 self.links.append((url, text))
             self._current_href = None

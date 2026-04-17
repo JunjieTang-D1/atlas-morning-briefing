@@ -731,8 +731,16 @@ class BriefingCoordinator:
             md.append("\n")
         return "".join(md)
 
-    def _render_newsletters(self, newsletters: List[Dict[str, Any]]) -> str:
+    def _render_newsletters(
+        self,
+        newsletters: List[Dict[str, Any]],
+        community_picks: Optional[List[Dict[str, Any]]] = None,
+    ) -> str:
         max_newsletters = self._get_limit("max_newsletters_render", 10)
+        picks_by_source: Dict[str, List[Dict[str, Any]]] = {}
+        for pick in (community_picks or []):
+            src = pick.get("source", "")
+            picks_by_source.setdefault(src, []).append(pick)
         md = ["## Newsletter Highlights\n\n"]
         for item in newsletters[:max_newsletters]:
             title = item.get("title", "Untitled")
@@ -747,9 +755,18 @@ class BriefingCoordinator:
                 md.append(f"**{title}** *({source})*{category_tag}\n")
             if summary:
                 md.append(f"{summary}\n")
-            links = item.get("links", [])
-            if links:
-                for url, link_title in links[:5]:
+            ranked = picks_by_source.get(source, [])
+            if ranked:
+                for pick in ranked[:5]:
+                    url = pick.get("url") or pick.get("link", "")
+                    pick_title = pick.get("title", url)
+                    desc = pick.get("brief_summary", "")
+                    if desc:
+                        md.append(f"- [{pick_title}]({url}) — {desc}\n")
+                    else:
+                        md.append(f"- [{pick_title}]({url})\n")
+            else:
+                for url, link_title in item.get("links", [])[:5]:
                     md.append(f"- [{link_title}]({url})\n")
             md.append("\n")
         return "".join(md)
@@ -857,7 +874,7 @@ class BriefingCoordinator:
             elif section == "community_picks":
                 md.append(self._render_community_picks(data))
             elif section == "newsletters":
-                md.append(self._render_newsletters(data))
+                md.append(self._render_newsletters(data, community_picks=community_picks or []))
             elif section == "blogs":
                 md.append(self._render_blogs(data))
             elif section == "top_papers":
