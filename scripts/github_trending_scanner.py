@@ -8,9 +8,10 @@ as briefing source items. No API key or external service required.
 
 import http.client
 import logging
+import os
 from html.parser import HTMLParser
 from typing import Any, Dict, List
-from urllib.request import Request, urlopen
+from urllib.request import Request, urlopen, build_opener, ProxyHandler
 from urllib.error import URLError
 
 from scripts.circuit_breaker import CircuitBreakerRegistry, CircuitOpenError
@@ -122,9 +123,11 @@ class GitHubTrendingScanner:
             List of article-like dicts compatible with the blog/news format.
         """
         def _fetch_html() -> str:
+            proxy_url = os.environ.get("WIREPROXY_URL", "http://127.0.0.1:18080")
+            opener = build_opener(ProxyHandler({"http": proxy_url, "https": proxy_url}))
             req = Request(_TRENDING_URL, headers={"User-Agent": _USER_AGENT})
             try:
-                with urlopen(req, timeout=30) as resp:
+                with opener.open(req, timeout=30) as resp:
                     return resp.read().decode("utf-8", errors="replace")
             except http.client.IncompleteRead as e:
                 logger.warning(f"GitHub trending: IncompleteRead ({len(e.partial)} bytes) — using partial data")

@@ -9,6 +9,7 @@ Scans RSS feeds for new blog articles.
 import argparse
 import json
 import logging
+import os
 import socket
 import sys
 from datetime import datetime, timedelta, timezone
@@ -134,6 +135,11 @@ class BlogScanner:
             List of all articles found across feeds
         """
         from concurrent.futures import ThreadPoolExecutor, as_completed
+
+        # Route feedparser through WireGuard proxy (feedparser respects HTTP_PROXY env var)
+        proxy_url = os.environ.get("WIREPROXY_URL", "http://127.0.0.1:18080")
+        os.environ.setdefault("HTTP_PROXY", proxy_url)
+        os.environ.setdefault("HTTPS_PROXY", proxy_url)
 
         all_articles = []
         valid_feeds = [
