@@ -10,6 +10,8 @@ Fallback: OpenRouter free models via OpenAI-compatible API.
 import logging
 import os
 import re
+import threading
+import time
 from typing import Any, Dict, Optional
 
 import requests
@@ -21,6 +23,97 @@ _llm_tracer = trace.get_tracer("personal.llm")
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 logger = logging.getLogger(__name__)
+
+
+class _MiniMaxQuotaGuard:
+    """Proactive quota guard for MiniMax M* models (error 2056 / call-limit exhaustion).
+
+    Fetches GET https://www.minimax.io/v1/token_plan/remains — no tokens consumed.
+    Thread-safe; safe to share across a single-process run.
+    """
+
+    CHECK_EVERY = 50
+    LOW_WATER = 30
+    BUFFER_SECS = 15
+    _QUOTA_URL = "https://www.minimax.io/v1/token_plan/remains"
+
+    def __init__(self, api_key: str) -> None:
+        self._api_key = api_key
+        self._call_count = 0
+        self._cached: Optional[Dict] = None
+        self._cached_at: float = 0.0
+        self._lock = threading.Lock()
+
+    def _fetch(self) -> Optional[Dict]:
+        try:
+            resp = requests.get(
+                self._QUOTA_URL,
+                headers={"Authorization": f"Bearer {self._api_key}"},
+                timeout=10,
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            self._cached = data
+            self._cached_at = time.monotonic()
+            return data
+        except Exception as e:
+            logger.warning(f"MiniMax quota fetch failed: {e}")
+            return None
+
+    def _quota_data(self) -> Optional[Dict]:
+        if self._cached is None or (time.monotonic() - self._cached_at) > 60:
+            return self._fetch()
+        return self._cached
+
+    def _m_entry(self, data: Dict) -> Optional[Dict]:
+        for entry in data.get("model_remains", []):
+            if "MiniMax-M" in entry.get("model_name", ""):
+                return entry
+        return None
+
+    def _remaining(self, data: Dict) -> Optional[int]:
+        entry = self._m_entry(data)
+        if entry is None:
+            return None
+        return entry["current_interval_total_count"] - entry["current_interval_usage_count"]
+
+    def _sleep_until_reset(self, data: Dict) -> None:
+        entry = self._m_entry(data)
+        secs = (entry["remains_time"] / 1000 + self.BUFFER_SECS) if entry else 300
+        logger.warning(f"MiniMax quota low — sleeping {secs:.0f}s until interval reset")
+        time.sleep(secs)
+
+    def before_call(self) -> None:
+        """Call before each MiniMax HTTP request. Sleeps if quota is nearly exhausted."""
+        with self._lock:
+            self._call_count += 1
+            stale = self._cached is not None and (time.monotonic() - self._cached_at) > 60
+            if self._call_count % self.CHECK_EVERY != 0 and not stale:
+                return
+
+        data = self._quota_data()
+        if data is None:
+            return
+        remaining = self._remaining(data)
+        if remaining is None or remaining >= self.LOW_WATER:
+            return
+
+        # Re-fetch for accurate count before sleeping
+        data = self._fetch()
+        if data is None:
+            return
+        remaining = self._remaining(data)
+        if remaining is not None and remaining < self.LOW_WATER:
+            self._sleep_until_reset(data)
+
+    def on_quota_error(self) -> None:
+        """Call on error 2056. Fetches accurate reset time, sleeps, caller retries once."""
+        data = self._fetch()
+        if data is None:
+            logger.warning("MiniMax quota error (2056) — could not fetch reset time, sleeping 300s")
+            time.sleep(300)
+            return
+        self._sleep_until_reset(data)
 
 
 class LLMClient:
@@ -82,6 +175,10 @@ class LLMClient:
             ),
         }
         self._fallback_api_key = os.environ.get("OPENROUTER_API_KEY", "")
+
+        self._quota_guard: Optional[_MiniMaxQuotaGuard] = (
+            _MiniMaxQuotaGuard(self._primary_api_key) if self._primary_api_key else None
+        )
 
     @property
     def available(self) -> bool:
@@ -245,12 +342,30 @@ class LLMClient:
                 r.raise_for_status()
                 return r
 
+            if self._quota_guard:
+                self._quota_guard.before_call()
+
             resp = _post()
             data = resp.json()
 
             if "error" in data:
-                logger.warning(f"MiniMax API returned error: {data['error']}")
-                return None, {}
+                err = data["error"]
+                err_code = err.get("code") if isinstance(err, dict) else None
+                if err_code == 2056 and self._quota_guard:
+                    logger.warning("MiniMax quota error (2056) — sleeping until reset, retrying once")
+                    self._quota_guard.on_quota_error()
+                    try:
+                        resp = _post()
+                        data = resp.json()
+                        if "error" in data:
+                            logger.warning(f"MiniMax API error after quota retry: {data['error']}")
+                            return None, {}
+                    except Exception as e:
+                        logger.error(f"MiniMax retry after quota error failed: {e}")
+                        return None, {}
+                else:
+                    logger.warning(f"MiniMax API returned error: {data['error']}")
+                    return None, {}
 
             choice = data["choices"][0]
             finish_reason = choice.get("finish_reason")
