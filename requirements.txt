@@ -22,11 +22,12 @@ nh3>=0.2.14
 # XML security (optional, falls back to stdlib)
 defusedxml>=0.7.1
 
-# OpenTelemetry tracing
+# OpenTelemetry tracing + metrics + logs
 opentelemetry-api>=1.25.0
 opentelemetry-sdk>=1.25.0
 opentelemetry-exporter-otlp-proto-http>=1.25.0
 opentelemetry-instrumentation-requests>=0.46b0
+opentelemetry-instrumentation-logging>=0.46b0
 
 # NotebookLM podcast generation
 notebooklm-py>=0.3.0

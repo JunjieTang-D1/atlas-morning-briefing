@@ -13,12 +13,26 @@ import logging
 import os
 from typing import Any, Callable, Dict, TypeVar
 
-from opentelemetry import trace
-from opentelemetry.sdk.resources import Resource
-from opentelemetry.sdk.resources import SERVICE_NAME
+from opentelemetry import metrics, trace
+from opentelemetry.exporter.otlp.proto.http._log_exporter import OTLPLogExporter
+from opentelemetry.exporter.otlp.proto.http.metric_exporter import OTLPMetricExporter
+from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
+from opentelemetry.sdk._logs import LoggerProvider, LoggingHandler
+from opentelemetry.sdk._logs.export import BatchLogRecordProcessor
+from opentelemetry.sdk.metrics import MeterProvider
+from opentelemetry.sdk.metrics._internal.instrument import (  # noqa: PLC2701
+    Counter,
+    Gauge,
+    Histogram,
+    ObservableCounter,
+    ObservableGauge,
+    ObservableUpDownCounter,
+    UpDownCounter,
+)
+from opentelemetry.sdk.metrics.export import AggregationTemporality, PeriodicExportingMetricReader
+from opentelemetry.sdk.resources import SERVICE_NAME, Resource
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
-from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
 
 logger = logging.getLogger(__name__)
 
@@ -53,10 +67,47 @@ def setup_tracing(config: Dict[str, Any]) -> None:
         "OTEL_SERVICE_NAME",
         otel_cfg.get("service_name", "personal-morning-briefing"),
     )
-    resource = Resource({SERVICE_NAME: service_name})
-    provider = TracerProvider(resource=resource)
-    provider.add_span_processor(BatchSpanProcessor(OTLPSpanExporter()))
-    trace.set_tracer_provider(provider)
+    resource = Resource.create({
+        SERVICE_NAME: service_name,
+        "deployment.environment": os.getenv("DEPLOYMENT_ENV", "production"),
+    })
+
+    # ── Tracing ────────────────────────────────────────────────
+    tracer_provider = TracerProvider(resource=resource)
+    tracer_provider.add_span_processor(BatchSpanProcessor(OTLPSpanExporter()))
+    trace.set_tracer_provider(tracer_provider)
+
+    # ── Metrics ────────────────────────────────────────────────
+    # Grafana (Prometheus-based) requires cumulative temporality.
+    _cumulative = AggregationTemporality.CUMULATIVE
+    metric_reader = PeriodicExportingMetricReader(
+        OTLPMetricExporter(
+            preferred_temporality={
+                Counter: _cumulative,
+                Gauge: _cumulative,
+                Histogram: _cumulative,
+                ObservableCounter: _cumulative,
+                ObservableGauge: _cumulative,
+                ObservableUpDownCounter: _cumulative,
+                UpDownCounter: _cumulative,
+            }
+        )
+    )
+    meter_provider = MeterProvider(resource=resource, metric_readers=[metric_reader])
+    metrics.set_meter_provider(meter_provider)
+
+    # ── Logs ───────────────────────────────────────────────────
+    logger_provider = LoggerProvider(resource=resource)
+    logger_provider.add_log_record_processor(BatchLogRecordProcessor(OTLPLogExporter()))
+    handler = LoggingHandler(level=logging.INFO, logger_provider=logger_provider)
+    logging.getLogger().addHandler(handler)
+
+    # Auto-instrument stdlib logging so all log records are forwarded via OTel
+    try:
+        from opentelemetry.instrumentation.logging import LoggingInstrumentor
+        LoggingInstrumentor().instrument()
+    except ImportError:
+        logger.debug("opentelemetry-instrumentation-logging not installed; skipping log auto-instrumentation")
 
     # Auto-instrument all outbound HTTP calls made via `requests`
     try:

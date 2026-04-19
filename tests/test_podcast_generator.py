@@ -117,7 +117,7 @@ class TestPodcastGeneratorInit:
             "max_wait_seconds": 300,
             "include_paper_urls": False,
         })
-        assert gen._audio_format_name == "DEEP-DIVE"
+        assert gen._audio_format_name == "DEEP_DIVE"
         assert gen._audio_length_name == "LONG"
         assert gen.max_wait_seconds == 300.0
         assert gen.include_paper_urls is False
