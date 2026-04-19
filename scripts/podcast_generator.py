@@ -63,8 +63,8 @@ class PodcastGenerator:
                 "and highlight the top 2-3 most significant developments."
             ),
         )
-        self._audio_format_name = config.get("audio_format", "brief").upper()
-        self._audio_length_name = config.get("audio_length", "short").upper()
+        self._audio_format_name = config.get("audio_format", "brief").upper().replace("-", "_")
+        self._audio_length_name = config.get("audio_length", "short").upper().replace("-", "_")
         self.max_wait_seconds = float(config.get("max_wait_seconds", 1200))
         self.include_paper_urls = config.get("include_paper_urls", True)
         self._storage_state_path: Optional[str] = config.get("storage_state_path")
