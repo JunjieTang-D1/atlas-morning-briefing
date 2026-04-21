@@ -182,7 +182,7 @@ class GmailScanner:
             return []
 
         try:
-            imap = imaplib.IMAP4_SSL(_IMAP_HOST, _IMAP_PORT)
+            imap = imaplib.IMAP4_SSL(_IMAP_HOST, _IMAP_PORT, timeout=30)
             imap.login(self.gmail_user, self.gmail_password)
         except imaplib.IMAP4.error as e:
             logger.error(f"Gmail IMAP login failed: {e}")
@@ -270,7 +270,7 @@ class GmailScanner:
             return False
 
         try:
-            imap = imaplib.IMAP4_SSL(_IMAP_HOST, _IMAP_PORT)
+            imap = imaplib.IMAP4_SSL(_IMAP_HOST, _IMAP_PORT, timeout=30)
             imap.login(self.gmail_user, self.gmail_password)
             imap.select(self.source_label, readonly=False)
             for num in self._fetched_nums:
