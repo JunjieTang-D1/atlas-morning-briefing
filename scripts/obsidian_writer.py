@@ -51,6 +51,7 @@ class ObsidianWriter:
                     "Authorization": f"Bearer {self.api_key}",
                 },
                 timeout=REQUEST_TIMEOUT,
+                proxies={},
             )
             if resp.status_code == 404:
                 return None
@@ -72,6 +73,7 @@ class ObsidianWriter:
                     "Authorization": f"Bearer {self.api_key}",
                 },
                 timeout=REQUEST_TIMEOUT,
+                proxies={},
             )
             resp.raise_for_status()
             return True
