@@ -2,7 +2,11 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
-# Install dependencies first (layer caching)
+# Install n8t-scraper (private shared package, checked out by CI before docker build)
+COPY n8t-scraper/ /tmp/n8t-scraper/
+RUN pip install --no-cache-dir /tmp/n8t-scraper && rm -rf /tmp/n8t-scraper
+
+# Install remaining dependencies (layer caching)
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 

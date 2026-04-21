@@ -32,13 +32,20 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Checkout n8t-scraper
+        uses: actions/checkout@v4
+        with:
+          repository: cpoepke/scraper
+          token: ${{ secrets.GH_SCRAPER_TOKEN }}
+          path: n8t-scraper
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.12'
 
       - name: Install dependencies
-        run: pip install -r requirements.txt && pip install pytest
+        run: pip install -e n8t-scraper && pip install -r requirements.txt && pip install pytest
 
       - name: Run tests
         run: python -m pytest tests/ -v
@@ -48,6 +55,13 @@ jobs:
     needs: test
     steps:
       - uses: actions/checkout@v4
+
+      - name: Checkout n8t-scraper
+        uses: actions/checkout@v4
+        with:
+          repository: cpoepke/scraper
+          token: ${{ secrets.GH_SCRAPER_TOKEN }}
+          path: n8t-scraper
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
