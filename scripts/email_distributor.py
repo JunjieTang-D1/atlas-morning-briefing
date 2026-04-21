@@ -52,7 +52,7 @@ class EmailDistributor:
 
     def _connect_smtp(self) -> smtplib.SMTP:
         """Create and authenticate SMTP connection."""
-        server = smtplib.SMTP(self.SMTP_SERVER, self.SMTP_PORT)
+        server = smtplib.SMTP(self.SMTP_SERVER, self.SMTP_PORT, timeout=30)
         server.starttls()
         server.login(self.sender_email, self.sender_password)
         return server
