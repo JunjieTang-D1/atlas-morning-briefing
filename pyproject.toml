@@ -13,6 +13,7 @@ authors = [
     {name = "Junjie Tang"},
 ]
 dependencies = [
+    "n8t-scraper",
     "requests>=2.31.0",
     "PyYAML>=6.0.1",
     "feedparser>=6.0.10",
@@ -39,3 +40,6 @@ pythonpath = ["."]
 
 [tool.setuptools.packages.find]
 include = ["scripts*"]
+
+[tool.uv.sources]
+n8t-scraper = { path = "../n8t-scraper", editable = true }
