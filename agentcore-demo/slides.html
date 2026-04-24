@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Harness-Guided Reasoning on AgentCore</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;900&display=swap');
+  
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  
+  body {
+    font-family: 'Inter', -apple-system, sans-serif;
+    background: #0a0a0a;
+    color: #ffffff;
+    overflow: hidden;
+  }
+  
+  .slide {
+    width: 1920px;
+    height: 1080px;
+    display: none;
+    padding: 80px;
+    position: relative;
+  }
+  
+  .slide.active { display: flex; flex-direction: column; }
+  
+  .slide-number {
+    position: absolute;
+    bottom: 40px;
+    right: 80px;
+    font-size: 18px;
+    color: #666;
+  }
+  
+  .aws-orange { color: #FF9900; }
+  .cedar-red { color: #FF4444; }
+  .harness-green { color: #00D084; }
+  .trainium-blue { color: #4FC3F7; }
+  .muted { color: #888; }
+  .bold { font-weight: 700; }
+  .light { font-weight: 300; }
+  
+  h1 { font-size: 72px; font-weight: 900; line-height: 1.1; margin-bottom: 20px; }
+  h2 { font-size: 48px; font-weight: 700; line-height: 1.2; margin-bottom: 30px; }
+  h3 { font-size: 36px; font-weight: 600; margin-bottom: 20px; }
+  
+  .subtitle { font-size: 32px; font-weight: 300; color: #aaa; margin-bottom: 40px; }
+  .tagline { font-size: 28px; font-weight: 400; color: #ccc; }
+  
+  .two-col { display: flex; gap: 80px; flex: 1; align-items: flex-start; }
+  .col { flex: 1; }
+  
+  .stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; margin-top: 40px; }
+  .stat-box {
+    background: #1a1a1a;
+    border: 1px solid #333;
+    border-radius: 16px;
+    padding: 30px;
+  }
+  .stat-number { font-size: 64px; font-weight: 900; }
+  .stat-label { font-size: 20px; color: #888; margin-top: 8px; }
+  
+  .arch-box {
+    background: #111;
+    border: 2px solid #333;
+    border-radius: 12px;
+    padding: 24px 32px;
+    margin: 12px 0;
+    font-size: 24px;
+  }
+  .arch-box.layer2 { border-color: #00D084; background: #0a1a0f; }
+  .arch-box.layer1 { border-color: #FF9900; background: #1a1100; }
+  .arch-box.agents { border-color: #4FC3F7; background: #0a1520; }
+  
+  .arch-label {
+    font-size: 16px;
+    font-weight: 600;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+  
+  .timeline { margin-top: 30px; }
+  .timeline-item {
+    display: flex;
+    gap: 20px;
+    margin-bottom: 20px;
+    align-items: flex-start;
+  }
+  .timeline-marker {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: #FF9900;
+    margin-top: 8px;
+    flex-shrink: 0;
+  }
+  .timeline-marker.red { background: #FF4444; }
+  .timeline-marker.green { background: #00D084; }
+  .timeline-marker.blue { background: #4FC3F7; }
+  .timeline-marker.gold { background: #FFD700; }
+  .timeline-text { font-size: 22px; line-height: 1.4; }
+  .timeline-detail { font-size: 18px; color: #888; margin-top: 4px; }
+  
+  .perf-table { width: 100%; border-collapse: collapse; margin-top: 20px; font-size: 22px; }
+  .perf-table th { text-align: left; padding: 12px 16px; border-bottom: 2px solid #333; color: #888; font-weight: 600; }
+  .perf-table td { padding: 12px 16px; border-bottom: 1px solid #1a1a1a; }
+  .perf-table .highlight { color: #00D084; font-weight: 700; }
+  .perf-table .dim { color: #555; }
+  
+  .quote-box {
+    background: #111;
+    border-left: 4px solid #FF9900;
+    padding: 30px 40px;
+    font-size: 28px;
+    font-style: italic;
+    line-height: 1.5;
+    margin: 30px 0;
+    color: #ddd;
+  }
+  
+  .pill {
+    display: inline-block;
+    padding: 6px 16px;
+    border-radius: 20px;
+    font-size: 16px;
+    font-weight: 600;
+    margin-right: 8px;
+  }
+  .pill.orange { background: #FF990022; color: #FF9900; border: 1px solid #FF990044; }
+  .pill.green { background: #00D08422; color: #00D084; border: 1px solid #00D08444; }
+  .pill.blue { background: #4FC3F722; color: #4FC3F7; border: 1px solid #4FC3F744; }
+  .pill.red { background: #FF444422; color: #FF4444; border: 1px solid #FF444444; }
+  
+  .footer-bar {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 4px;
+    background: linear-gradient(90deg, #FF9900, #00D084, #4FC3F7);
+  }
+  
+  .controls {
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 100;
+    display: flex;
+    gap: 10px;
+  }
+  .controls button {
+    background: #333;
+    color: #fff;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 16px;
+  }
+  .controls button:hover { background: #555; }
+</style>
+</head>
+<body>
+
+<!-- SLIDE 1: Title -->
+<div class="slide active" id="s1">
+  <div style="flex:1; display:flex; flex-direction:column; justify-content:center;">
+    <div class="pill orange">Amazon Bedrock AgentCore</div>
+    <div class="pill green">Harness Engineering Kit</div>
+    <div class="pill blue">AWS Trainium</div>
+    <br><br>
+    <h1>Harness-Guided<br>Reasoning</h1>
+    <p class="subtitle">How Structural Constraints Improve<br>AI Agent Reliability + Enable Discovery</p>
+    <br>
+    <p class="tagline"><span class="bold">Junjie Tang</span> &nbsp;·&nbsp; Sr. Principal, AWS</p>
+    <p class="tagline muted" style="margin-top:8px">April 2026</p>
+  </div>
+  <div class="footer-bar"></div>
+  <div class="slide-number">1 / 6</div>
+</div>
+
+<!-- SLIDE 2: The Problem -->
+<div class="slide" id="s2">
+  <h2>The Problem</h2>
+  <p class="subtitle">Models are commoditizing. The bottleneck moved.</p>
+  <div class="two-col" style="margin-top:20px">
+    <div class="col">
+      <div class="quote-box">
+        "Every team building agents is rebuilding the same infrastructure from scratch — orchestration, governance, memory, tooling — before they can test whether the agent is any good."
+        <br><br>
+        <span style="font-style:normal; font-size:20px; color:#FF9900">— AWS AgentCore Blog, April 24, 2026</span>
+      </div>
+      <div style="margin-top:30px">
+        <h3 class="aws-orange">Three eras of AI engineering:</h3>
+        <div class="timeline">
+          <div class="timeline-item">
+            <div class="timeline-marker"></div>
+            <div><span class="timeline-text"><span class="muted">2023</span> &nbsp; Prompt Engineering</span>
+            <div class="timeline-detail">How to talk to models</div></div>
+          </div>
+          <div class="timeline-item">
+            <div class="timeline-marker"></div>
+            <div><span class="timeline-text"><span class="muted">2024</span> &nbsp; Context Engineering</span>
+            <div class="timeline-detail">How to feed models information</div></div>
+          </div>
+          <div class="timeline-item">
+            <div class="timeline-marker gold"></div>
+            <div><span class="timeline-text"><span class="bold">2026</span> &nbsp; <span class="harness-green">Harness Engineering</span></span>
+            <div class="timeline-detail">How to make agents actually run — safely, reliably, in production</div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="col">
+      <div class="stat-grid">
+        <div class="stat-box">
+          <div class="stat-number aws-orange">517%</div>
+          <div class="stat-label">ROI in 4 months<br>Rede Mater Dei (12 agents)</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-number harness-green">100%</div>
+          <div class="stat-label">Test pass rate<br>AgentCorp V8 Stripe</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-number trainium-blue">10.8×</div>
+          <div class="stat-label">Kernel speedup<br>Agent on Trainium</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-number cedar-red">0</div>
+          <div class="stat-label">Policy violations<br>Cedar governance</div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="footer-bar"></div>
+  <div class="slide-number">2 / 6</div>
+</div>
+
+<!-- SLIDE 3: Architecture -->
+<div class="slide" id="s3">
+  <h2>Two-Layer Governance</h2>
+  <p class="subtitle">AWS manages HOW agents run. We engineer HOW agents THINK.</p>
+  <div style="flex:1; display:flex; gap:60px; margin-top:20px;">
+    <div style="flex:1.2">
+      <div class="arch-box layer2">
+        <div class="arch-label harness-green">Layer 3 — Reasoning Harness</div>
+        <div style="font-size:22px; line-height:1.6">
+          <strong>harness-engineering-kit</strong> (open source, 10K+ LOC)<br>
+          PretestValidator: imports, PHI scan, dependencies<br>
+          Nightly tests + feedback injection + phase gates<br>
+          <span class="muted">The QA team that never sleeps</span>
+        </div>
+      </div>
+      <div class="arch-box layer1">
+        <div class="arch-label aws-orange">Layer 2 — AgentCore Managed Harness</div>
+        <div style="font-size:22px; line-height:1.6">
+          <strong>Amazon Bedrock AgentCore</strong> (launched today!)<br>
+          Orchestration: Planner assigns → Cedar checks → Workers execute<br>
+          Cedar policies: file-scope write rules, PHI protection<br>
+          Firecracker microVM · Memory · Identity · Observability
+        </div>
+      </div>
+      <div class="arch-box agents">
+        <div class="arch-label trainium-blue">Layer 1 — Claude Code Workers</div>
+        <div style="font-size:22px; line-height:1.6">
+          Each worker = Claude Code session (Sonnet 4.6 on Bedrock)<br>
+          Write → Run → Fail → Fix → Retest → Pass (self-debugging loop)<br>
+          Real shell access, real tests, real iteration
+        </div>
+      </div>
+    </div>
+    <div style="flex:0.8;">
+      <h3 style="margin-top:20px;">Key insight:</h3>
+      <div class="quote-box" style="border-color:#00D084;">
+        <span class="aws-orange bold">AgentCore</span> governs WHAT gets built.<br><br>
+        <span class="trainium-blue bold">Claude Code</span> builds it.<br><br>
+        <span class="harness-green bold">The harness</span> ensures it's built RIGHT.<br><br>
+        <span class="muted" style="font-size:22px; font-style:normal">Three layers. Three jobs. You need all three.</span>
+      </div>
+      <div style="margin-top:30px; font-size:20px; color:#888;">
+        <strong style="color:#ccc">Marc Brooker's thesis:</strong><br>
+        "Safety is a deterministic box<br>OUTSIDE the agent, not inside it."
+      </div>
+    </div>
+  </div>
+  <div class="footer-bar"></div>
+  <div class="slide-number">3 / 6</div>
+</div>
+
+<!-- SLIDE 4: Healthcare Demo -->
+<div class="slide" id="s4">
+  <div style="display:flex; align-items:center; gap:16px; margin-bottom:10px;">
+    <span class="pill red">DEMO 1</span>
+    <h2 style="margin-bottom:0">Healthcare: 6 Agents, Zero Trust Violations</h2>
+  </div>
+  <p class="subtitle">HIPAA-compliant Clinical AI Platform on AgentCore</p>
+  <div class="two-col">
+    <div class="col">
+      <h3>Sprint Simulation</h3>
+      <div class="timeline">
+        <div class="timeline-item">
+          <div class="timeline-marker blue"></div>
+          <div><span class="timeline-text">6 agents register on AgentCore Runtime</span></div>
+        </div>
+        <div class="timeline-item">
+          <div class="timeline-marker"></div>
+          <div><span class="timeline-text">Planner assigns 6 stories to workers</span></div>
+        </div>
+        <div class="timeline-item">
+          <div class="timeline-marker red"></div>
+          <div><span class="timeline-text"><span class="cedar-red bold">⛔ Cedar DENY</span> — Frontend writes to backend scope</span>
+          <div class="timeline-detail">Policy: cross-scope writes prohibited (HIPAA)</div></div>
+        </div>
+        <div class="timeline-item">
+          <div class="timeline-marker red"></div>
+          <div><span class="timeline-text"><span class="cedar-red bold">🛑 PretestValidator</span> — PHI field without encryption</span>
+          <div class="timeline-detail">Caught BEFORE pytest, injected into Day 2 planning</div></div>
+        </div>
+        <div class="timeline-item">
+          <div class="timeline-marker green"></div>
+          <div><span class="timeline-text"><span class="harness-green bold">Day 2:</span> Agents fix + retry → tests improve</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="col">
+      <h3>Results</h3>
+      <div class="stat-grid" style="grid-template-columns:1fr 1fr">
+        <div class="stat-box">
+          <div class="stat-number harness-green">96.4%</div>
+          <div class="stat-label">Test pass rate (Day 2)</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-number aws-orange">+8.5%</div>
+          <div class="stat-label">Day-over-day improvement</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-number cedar-red">0</div>
+          <div class="stat-label">HIPAA violations in prod</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-number trainium-blue">3</div>
+          <div class="stat-label">Errors caught pre-CI/CD</div>
+        </div>
+      </div>
+      <div style="margin-top:30px; padding:20px; background:#1a1100; border:1px solid #FF990044; border-radius:12px;">
+        <div style="font-size:18px; color:#FF9900; font-weight:600;">REAL-WORLD REFERENCE</div>
+        <div style="font-size:22px; margin-top:8px;">Rede Mater Dei de Saúde — 12 agents on AgentCore<br>517% ROI · 66% faster authorizations · Zero violations</div>
+      </div>
+    </div>
+  </div>
+  <div class="footer-bar"></div>
+  <div class="slide-number">4 / 6</div>
+</div>
+
+<!-- SLIDE 5: Trainium Demo -->
+<div class="slide" id="s5">
+  <div style="display:flex; align-items:center; gap:16px; margin-bottom:10px;">
+    <span class="pill blue">DEMO 2</span>
+    <h2 style="margin-bottom:0">Trainium: Agent Discovers Novel Optimization</h2>
+  </div>
+  <p class="subtitle">FlashAttention kernel optimization via iterative harness-guided reasoning</p>
+  <div class="two-col">
+    <div class="col">
+      <h3>Iteration History</h3>
+      <div class="timeline">
+        <div class="timeline-item">
+          <div class="timeline-marker blue"></div>
+          <div><span class="timeline-text">Round 1: Tiling → 17,437µs <span class="muted">(3.9× from baseline)</span></span></div>
+        </div>
+        <div class="timeline-item">
+          <div class="timeline-marker blue"></div>
+          <div><span class="timeline-text">Round 3: Fused softmax → 6,228µs <span class="muted">(10.9×)</span></span></div>
+        </div>
+        <div class="timeline-item">
+          <div class="timeline-marker red"></div>
+          <div><span class="timeline-text">R6 Iter 1: Remove scaling → <span class="cedar-red">FAIL</span> (correctness)</span></div>
+        </div>
+        <div class="timeline-item">
+          <div class="timeline-marker gold"></div>
+          <div><span class="timeline-text" style="font-size:24px;"><span class="bold" style="color:#FFD700;">💡 R6 Iter 4: K-SCALING DISCOVERY</span></span>
+          <div class="timeline-detail" style="font-size:20px; color:#ccc; margin-top:8px;">
+            Math: (Q·s) @ K<sup>T</sup> ≡ Q @ (K·s)<sup>T</sup><br>
+            K tiles bounded by d_head=128 (constant)<br>
+            Q tiles grow with seqlen → dominate SBUF at 16K<br>
+            <span style="color:#FFD700; font-weight:600;">Saves 4MB SBUF. Not in any paper. Patent pending.</span>
+          </div></div>
+        </div>
+      </div>
+    </div>
+    <div class="col">
+      <h3>Performance (µs, 16K seqlen)</h3>
+      <table class="perf-table">
+        <tr><th>Kernel</th><th>512</th><th>4K</th><th>16K</th><th>vs Baseline</th></tr>
+        <tr class="dim"><td>v3 (naive)</td><td>57</td><td>3,130</td><td>67,733</td><td>1.0×</td></tr>
+        <tr><td>v7 (human)</td><td>19</td><td>400</td><td>6,228</td><td>10.9×</td></tr>
+        <tr><td class="highlight">Agent (harness)</td><td class="highlight">19</td><td class="highlight">400</td><td class="highlight">6,236</td><td class="highlight">10.8×</td></tr>
+      </table>
+      <div style="margin-top:30px; padding:20px; background:#0a1520; border:1px solid #4FC3F744; border-radius:12px;">
+        <div style="font-size:18px; color:#4FC3F7; font-weight:600;">THE PUNCHLINE</div>
+        <div style="font-size:22px; margin-top:8px; line-height:1.5;">
+          FlashAttention: 4 papers, 3 years, NVIDIA + Meta<br>
+          <span class="bold trainium-blue">One agent, 45 minutes, plus a novel discovery.</span>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="footer-bar"></div>
+  <div class="slide-number">5 / 6</div>
+</div>
+
+<!-- SLIDE 6: Close -->
+<div class="slide" id="s6">
+  <div style="flex:1; display:flex; flex-direction:column; justify-content:center;">
+    <h1 style="font-size:60px; line-height:1.3;">
+      <span class="aws-orange">AgentCore</span> governs what gets built.<br>
+      <span class="trainium-blue">Claude Code</span> builds it.<br>
+      <span class="harness-green">The harness</span> ensures it's built right.<br>
+      <br>
+      <span class="light muted" style="font-size:40px;">Three layers. Three jobs.</span>
+    </h1>
+    <br><br>
+    <div style="display:flex; gap:40px; font-size:22px;">
+      <div>
+        <div style="color:#888; font-size:16px; font-weight:600; letter-spacing:1px;">OPEN SOURCE</div>
+        <div style="margin-top:8px;">github.com/JunjieTang-D1/harness-engineering-kit</div>
+        <div>github.com/JunjieTang-D1/agentcorp</div>
+      </div>
+      <div>
+        <div style="color:#888; font-size:16px; font-weight:600; letter-spacing:1px;">BLOG</div>
+        <div style="margin-top:8px;">junjietang.dev</div>
+      </div>
+      <div>
+        <div style="color:#888; font-size:16px; font-weight:600; letter-spacing:1px;">CONTACT</div>
+        <div style="margin-top:8px;">Junjie Tang · Sr. Principal, AWS</div>
+      </div>
+    </div>
+  </div>
+  <div class="footer-bar"></div>
+  <div class="slide-number">6 / 6</div>
+</div>
+
+<div class="controls">
+  <button onclick="navigate(-1)">← Prev</button>
+  <button onclick="navigate(1)">Next →</button>
+</div>
+
+<script>
+let current = 0;
+const slides = document.querySelectorAll('.slide');
+
+function navigate(dir) {
+  slides[current].classList.remove('active');
+  current = Math.max(0, Math.min(slides.length - 1, current + dir));
+  slides[current].classList.add('active');
+}
+
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'ArrowRight' || e.key === ' ') navigate(1);
+  if (e.key === 'ArrowLeft') navigate(-1);
+});
+</script>
+
+</body>
+</html>

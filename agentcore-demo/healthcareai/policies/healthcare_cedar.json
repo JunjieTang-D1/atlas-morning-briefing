@@ -1,0 +1,159 @@
+{
+  "version": "1.0",
+  "description": "Cedar-style governance policies for HIPAA-compliant Clinical AI Platform on AgentCore",
+  "allow_rules": [
+    {
+      "id": "ALLOW-001",
+      "description": "Backend Engineer can write to src/backend/",
+      "principal": "backend_engineer",
+      "action": "write",
+      "resource": "src/backend/**"
+    },
+    {
+      "id": "ALLOW-002",
+      "description": "Frontend Engineer can write to src/frontend/",
+      "principal": "frontend_engineer",
+      "action": "write",
+      "resource": "src/frontend/**"
+    },
+    {
+      "id": "ALLOW-003",
+      "description": "ML Engineer can write to src/models/",
+      "principal": "ml_engineer",
+      "action": "write",
+      "resource": "src/models/**"
+    },
+    {
+      "id": "ALLOW-004",
+      "description": "QA Engineer can write to tests/",
+      "principal": "qa_engineer",
+      "action": "write",
+      "resource": "tests/**"
+    },
+    {
+      "id": "ALLOW-005",
+      "description": "DevOps Engineer can write to infrastructure/",
+      "principal": "devops_engineer",
+      "action": "write",
+      "resource": "infrastructure/**"
+    },
+    {
+      "id": "ALLOW-006",
+      "description": "Security Engineer can write to security/",
+      "principal": "security_engineer",
+      "action": "write",
+      "resource": "security/**"
+    },
+    {
+      "id": "ALLOW-007",
+      "description": "All agents can read any project file",
+      "principal": "*",
+      "action": "read",
+      "resource": "**"
+    },
+    {
+      "id": "ALLOW-008",
+      "description": "Chief Planner can write to docs/ and planning/",
+      "principal": "chief_planner",
+      "action": "write",
+      "resource": "docs/**,planning/**"
+    },
+    {
+      "id": "ALLOW-009",
+      "description": "Judge can read all files and write to reviews/",
+      "principal": "judge",
+      "action": "write",
+      "resource": "reviews/**"
+    },
+    {
+      "id": "ALLOW-010",
+      "description": "DevOps can write root config files (Dockerfile, pyproject.toml, Makefile)",
+      "principal": "devops_engineer",
+      "action": "write",
+      "resource": "Dockerfile,pyproject.toml,Makefile,.github/**"
+    },
+    {
+      "id": "ALLOW-011",
+      "description": "Security Engineer can append to audit logs",
+      "principal": "security_engineer",
+      "action": "append",
+      "resource": "security/audit_log/**"
+    },
+    {
+      "id": "ALLOW-012",
+      "description": "All agents can execute sandboxed Python for testing",
+      "principal": "*",
+      "action": "execute",
+      "resource": "tool:run_python_sandbox"
+    }
+  ],
+  "deny_rules": [
+    {
+      "id": "DENY-001",
+      "description": "No agent can write outside its designated scope",
+      "principal": "*",
+      "action": "write",
+      "resource": "!{principal.write_scope}",
+      "note": "Cross-scope writes are the #1 source of agent coordination failures"
+    },
+    {
+      "id": "DENY-002",
+      "description": "No agent except data_engineer can access raw PHI",
+      "principal": "!data_engineer",
+      "action": "read",
+      "resource": "data/raw_phi/**",
+      "note": "HIPAA §164.502 — minimum necessary standard"
+    },
+    {
+      "id": "DENY-003",
+      "description": "No agent can modify audit logs (append-only)",
+      "principal": "*",
+      "action": "modify,delete",
+      "resource": "security/audit_log/**",
+      "note": "Audit logs are immutable — required for HIPAA compliance audits"
+    },
+    {
+      "id": "DENY-004",
+      "description": "No agent can write PHI to unencrypted storage",
+      "principal": "*",
+      "action": "write",
+      "resource": "*.log,*.txt,*.csv",
+      "condition": "content.contains_phi == true AND resource.encrypted == false",
+      "note": "HIPAA §164.312(a)(2)(iv) — encryption at rest"
+    },
+    {
+      "id": "DENY-005",
+      "description": "ML Engineer cannot access compliance module",
+      "principal": "ml_engineer",
+      "action": "write",
+      "resource": "src/compliance/**",
+      "note": "Separation of concerns — ML code and compliance code have different review requirements"
+    },
+    {
+      "id": "DENY-006",
+      "description": "No agent can disable Bedrock Guardrails",
+      "principal": "*",
+      "action": "modify",
+      "resource": "config/guardrails/**",
+      "note": "Content filtering for clinical text generation must remain active"
+    },
+    {
+      "id": "DENY-007",
+      "description": "No agent can execute arbitrary shell commands in production",
+      "principal": "*",
+      "action": "execute",
+      "resource": "tool:shell_exec",
+      "condition": "environment == 'production'",
+      "note": "Shell access restricted to sandbox/dev environments only"
+    },
+    {
+      "id": "DENY-008",
+      "description": "No agent can commit credentials or API keys",
+      "principal": "*",
+      "action": "write",
+      "condition": "content.matches_pattern('(?i)(api_key|secret|password|token)\\s*=\\s*[\"\\'][^\"\\']+')",
+      "resource": "**",
+      "note": "Credentials must use AWS Secrets Manager or environment variables"
+    }
+  ]
+}

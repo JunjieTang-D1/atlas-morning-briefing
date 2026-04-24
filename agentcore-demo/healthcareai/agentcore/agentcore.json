@@ -1,0 +1,33 @@
+{
+  "$schema": "https://schema.agentcore.aws.dev/v1/agentcore.json",
+  "name": "healthcareai",
+  "version": 1,
+  "managedBy": "CDK",
+  "tags": {
+    "agentcore:created-by": "agentcore-cli",
+    "agentcore:project-name": "healthcareai"
+  },
+  "runtimes": [
+    {
+      "name": "healthcareai",
+      "build": "CodeZip",
+      "entrypoint": "main.py",
+      "codeLocation": "app/healthcareai/",
+      "runtimeVersion": "PYTHON_3_14",
+      "networkMode": "PUBLIC",
+      "protocol": "HTTP"
+    }
+  ],
+  "memories": [],
+  "credentials": [],
+  "evaluators": [],
+  "onlineEvalConfigs": [],
+  "agentCoreGateways": [],
+  "policyEngines": [],
+  "harnesses": [
+    {
+      "name": "healthcareai",
+      "path": "app/healthcareai"
+    }
+  ]
+}

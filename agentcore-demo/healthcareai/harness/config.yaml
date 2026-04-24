@@ -1,0 +1,148 @@
+# Harness Engineering Kit — Healthcare Configuration
+# Integrates with AgentCore Managed Harness for dual-layer governance
+
+project:
+  name: clinical-ai-platform
+  domain: healthcare
+  compliance: HIPAA
+  runtime: agentcore  # AgentCore Managed Harness
+
+# 10 Pillars of Harness Engineering
+pillars:
+
+  # 1. Context — What agents know before they start
+  context:
+    system_prompt_template: domains/healthcare/DOMAIN.md
+    team_definition: domains/healthcare/TEAM.md
+    domain_knowledge:
+      - HIPAA Safe Harbor de-identification (18 identifiers)
+      - FHIR R4 resource types and relationships
+      - AWS HealthLake query patterns
+      - Bedrock Guardrails content policy
+    hardware_context: null  # Not applicable for healthcare (used for Trainium)
+
+  # 2. Constraints — What agents cannot do (Cedar policies)
+  constraints:
+    policy_engine: cedar
+    policy_file: policies/healthcare_cedar.json
+    enforcement: strict  # DENY = hard block, no override
+    allow_rules: 12
+    deny_rules: 8
+    phi_protection: true
+    audit_log_immutable: true
+
+  # 3. Governance — How agents are supervised
+  governance:
+    architecture: hierarchical  # Planner → Workers → Judge
+    planner_model: global.anthropic.claude-opus-4-6-v1
+    worker_model: global.anthropic.claude-sonnet-4-6
+    judge_model: global.anthropic.claude-opus-4-6-v1
+    approval_required:
+      - deploy_to_production
+      - modify_patient_data
+      - disable_guardrails
+    bedrock_guardrails:
+      content_filter: enabled
+      pii_detection: enabled
+      topic_denial:
+        - medical_advice_without_disclaimer
+        - unauthorized_drug_recommendations
+
+  # 4. Feedback — How agents learn from mistakes
+  feedback:
+    pretest_validator:
+      enabled: true
+      checks:
+        - import_validation
+        - stdlib_shadow_detection
+        - dependency_graph_analysis
+        - circular_import_detection
+        - phi_field_scanning  # Healthcare-specific
+    nightly_tests:
+      enabled: true
+      schedule: end_of_each_day
+      checks:
+        - syntax_check
+        - import_check
+        - pytest_run
+        - dockerfile_validation
+        - hipaa_compliance_scan  # Healthcare-specific
+    feedback_injection:
+      mode: automatic
+      target: next_day_planning
+      format: structured_json
+
+  # 5. Session — How agent state persists
+  session:
+    persistence: agentcore_filesystem  # AgentCore persistent filesystem
+    cross_day_memory: true
+    scratchpad: shared  # Agents share context via scratchpad
+    session_timeout: 3600  # 1 hour per day
+    resume_on_failure: true
+
+  # 6. Workspace — How agents organize their work
+  workspace:
+    isolation_mode: tool  # File-level isolation via Cedar write scopes
+    project_structure:
+      src/: agent-written code
+      tests/: test suites
+      docs/: documentation
+      infrastructure/: CDK/deployment
+      security/: audit and compliance
+    shared_directory: project/
+    read_before_write: mandatory  # Agyn pattern — always read existing code first
+
+  # 7. Execution — How agent code runs
+  execution:
+    sandbox: firecracker_microvm  # AgentCore hardware isolation
+    resource_limits:
+      max_memory_mb: 2048
+      max_disk_mb: 10240
+      max_cpu_seconds: 300
+    code_interpreter: enabled
+    shell_access: dev_only  # No shell in production
+
+  # 8. Review — How agent output is evaluated
+  review:
+    judge_review: end_of_each_day
+    evaluation_pillars:
+      - llm_quality
+      - memory_retention
+      - tool_usage
+      - environment_compliance
+      - outcome_metrics
+    escalation_triggers:
+      - no_consensus_between_agents
+      - low_confidence_score  # < 0.7
+      - critical_artifact_missing
+    human_in_the_loop: on_escalation
+
+  # 9. Timing — When things happen
+  timing:
+    sprint_duration: 10_days
+    phase_gates:
+      day_3: foundation_complete
+      day_6: training_models_validated
+      day_9: integration_tests_passing
+    gate_threshold: 0.7  # 70% of criteria must pass
+    nightly_test_window: end_of_day
+    timeout_per_agent_per_day: 900  # 15 minutes
+
+  # 10. Benchmarks — How we measure harness effectiveness
+  benchmarks:
+    harness_effectiveness:
+      formula: (resolve_with_harness - resolve_without) / resolve_without
+      baseline: v8_healthcare_run2_unconstrained
+      target: v8_healthcare_run2_governed
+    metrics:
+      - test_pass_rate
+      - policy_violations_blocked
+      - phi_exposures_prevented
+      - feedback_loop_improvement
+      - stories_completed
+    comparison:
+      mater_dei_reference:
+        agents: 12
+        roi: 517%
+        authorization_time_reduction: 66%
+        surgery_start_reduction: 33%
