@@ -1,0 +1,99 @@
+{
+  "timestamp": "2026-04-24T12:52:30.598472+00:00",
+  "version": "v9",
+  "architecture": "agentcore_cedar_claudecode_harness",
+  "duration_seconds": 7.9,
+  "metrics": {
+    "stories_total": 6,
+    "stories_completed": 4,
+    "cedar_denials": 0,
+    "harness_catches": 7,
+    "self_repairs": 0,
+    "test_pass_rates": [
+      100.0,
+      100.0
+    ]
+  },
+  "worker_results": [
+    {
+      "story_id": "US-001",
+      "status": "fail",
+      "self_repairs": 0,
+      "files": [
+        "src/backend/api.py",
+        "tests/test_api.py"
+      ],
+      "duration_ms": 424
+    },
+    {
+      "story_id": "US-002",
+      "status": "pass",
+      "self_repairs": 0,
+      "files": [
+        "src/frontend/PatientList.tsx",
+        "tests/test_frontend.py"
+      ],
+      "duration_ms": 426
+    },
+    {
+      "story_id": "US-003",
+      "status": "pass",
+      "self_repairs": 0,
+      "files": [
+        "src/models/clinical_ner.py",
+        "tests/test_ner.py"
+      ],
+      "duration_ms": 424
+    },
+    {
+      "story_id": "US-004",
+      "status": "fail",
+      "self_repairs": 0,
+      "files": [
+        "tests/test_api.py",
+        "tests/test_api.py"
+      ],
+      "duration_ms": 717
+    },
+    {
+      "story_id": "US-005",
+      "status": "pass",
+      "self_repairs": 0,
+      "files": [
+        "Dockerfile",
+        "tests/test_docker.py"
+      ],
+      "duration_ms": 418
+    },
+    {
+      "story_id": "US-006",
+      "status": "pass",
+      "self_repairs": 0,
+      "files": [
+        "security/audit_log.py",
+        "tests/test_audit.py"
+      ],
+      "duration_ms": 421
+    },
+    {
+      "story_id": "US-001",
+      "status": "fail",
+      "self_repairs": 0,
+      "files": [
+        "src/backend/api.py",
+        "tests/test_api.py"
+      ],
+      "duration_ms": 733
+    },
+    {
+      "story_id": "US-004",
+      "status": "fail",
+      "self_repairs": 0,
+      "files": [
+        "tests/test_api.py",
+        "tests/test_api.py"
+      ],
+      "duration_ms": 718
+    }
+  ]
+}
