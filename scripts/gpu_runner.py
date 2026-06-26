@@ -26,6 +26,7 @@ import json
 import os
 import subprocess
 import sys
+import threading
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -39,13 +40,13 @@ MAX_RUNTIME_HOURS = 4  # Default. Extended runs require approval (see --request-
 REGION = "us-east-1"
 SUBNET_ID = "subnet-0a9bcb1a9094da197"
 SUBNET_TRN1 = "subnet-08608538369219acb"  # us-east-1f for trn1
-SUBNET_TRN1_FALLBACK = "subnet-013d6036340119601"  # us-east-1a for trn1 (fallback)
+SUBNET_TRN1_FALLBACK = "subnet-023f2eb13ea9f21f7"  # us-east-1c for trn1 (fallback)
 VPC_ID = "vpc-0709c477aae73f852"
 KEY_NAME = "atlas-gpu-runner"
 
 # AMI IDs (us-east-1) - Deep Learning AMIs with CUDA/Neuron pre-installed
 AMIS = {
-    "g5.xlarge": "ami-0aad28499825d76c3",        # Deep Learning OSS Nvidia PyTorch 2.9 (Ubuntu 24.04) 2026-02-26
+    "g5.xlarge": "ami-09710b68d655396d4",        # Deep Learning OSS Nvidia Driver AMI GPU PyTorch 2.11 (Ubuntu 24.04) 20260517
     "trn1.2xlarge": "ami-07b811b84eb8717f1",     # Deep Learning Neuron PyTorch 2.9 (Ubuntu 24.04) 2026-02-27
 }
 
@@ -113,8 +114,8 @@ def ensure_security_group(ec2):
     return sg_id
 
 
-def launch_spot(ec2, instance_type, sg_id, task_name):
-    """Launch a spot instance with AZ fallback for Trainium."""
+def launch_spot(ec2, instance_type, sg_id, task_name, force_on_demand=False):
+    """Launch a spot instance (or on-demand if force_on_demand=True) with AZ fallback."""
     assert instance_type in ALLOWED_INSTANCES, f"BLOCKED: {instance_type} not allowed"
 
     ami_id = AMIS.get(instance_type, AMIS["g5.xlarge"])
@@ -126,7 +127,10 @@ def launch_spot(ec2, instance_type, sg_id, task_name):
         subnets_to_try = [SUBNET_ID]
 
     last_error = None
-    for subnet in subnets_to_try:
+    spot_subnets = [] if force_on_demand else subnets_to_try
+    if force_on_demand:
+        print(f"  🔑 Skipping spot, launching on-demand directly (--on-demand flag)")
+    for subnet in spot_subnets:
         try:
             print(f"\n🚀 Launching {instance_type} spot instance (subnet {subnet})...")
             resp = ec2.run_instances(
@@ -141,6 +145,16 @@ def launch_spot(ec2, instance_type, sg_id, task_name):
                         "AssociatePublicIpAddress": False,  # NO public IP
                         "DeviceIndex": 0,
                         "Groups": [sg_id],
+                    }
+                ],
+                BlockDeviceMappings=[
+                    {
+                        "DeviceName": "/dev/sda1",
+                        "Ebs": {
+                            "VolumeSize": 150,  # 150GB root: DLAMI ~25GB + model ~16GB + wheels + working room
+                            "VolumeType": "gp3",
+                            "DeleteOnTermination": True,
+                        },
                     }
                 ],
                 InstanceMarketOptions={
@@ -178,10 +192,14 @@ def launch_spot(ec2, instance_type, sg_id, task_name):
                 print(f"  ⚠️  {instance_type} not supported in {subnet}'s AZ, skipping...")
                 last_error = e
                 continue
+            if "ServiceLinkedRole" in error_msg or "AuthFailure" in error_msg:
+                print(f"  ⚠️  Spot role not available in {subnet}, will try on-demand...")
+                last_error = e
+                break  # skip remaining spot attempts, go straight to on-demand
             raise
 
-    # All spot attempts failed — try on-demand as last resort
-    for subnet in subnets_to_try:
+    # All spot attempts failed — try on-demand as last resort (try fallback AZ first)
+    for subnet in reversed(subnets_to_try):
         try:
             print(f"\n🚀 Falling back to ON-DEMAND {instance_type} (subnet {subnet})...")
             resp = ec2.run_instances(
@@ -196,6 +214,16 @@ def launch_spot(ec2, instance_type, sg_id, task_name):
                         "AssociatePublicIpAddress": False,
                         "DeviceIndex": 0,
                         "Groups": [sg_id],
+                    }
+                ],
+                BlockDeviceMappings=[
+                    {
+                        "DeviceName": "/dev/sda1",
+                        "Ebs": {
+                            "VolumeSize": 150,
+                            "VolumeType": "gp3",
+                            "DeleteOnTermination": True,
+                        },
                     }
                 ],
                 TagSpecifications=[
@@ -227,17 +255,26 @@ def launch_spot(ec2, instance_type, sg_id, task_name):
 def wait_for_running(ec2, instance_id, timeout=300):
     """Wait for instance to be running and get private IP."""
     print(f"  Waiting for instance to be running...", end="", flush=True)
+    # Cross-AZ eventual consistency: wait a few seconds before first describe
+    time.sleep(10)
     start = time.time()
     while time.time() - start < timeout:
-        resp = ec2.describe_instances(InstanceIds=[instance_id])
-        state = resp["Reservations"][0]["Instances"][0]["State"]["Name"]
-        if state == "running":
-            private_ip = resp["Reservations"][0]["Instances"][0].get("PrivateIpAddress")
-            print(f" ✅ ({private_ip})")
-            return private_ip
-        elif state in ("terminated", "shutting-down"):
-            print(f" ❌ ({state})")
-            return None
+        try:
+            resp = ec2.describe_instances(InstanceIds=[instance_id])
+            state = resp["Reservations"][0]["Instances"][0]["State"]["Name"]
+            if state == "running":
+                private_ip = resp["Reservations"][0]["Instances"][0].get("PrivateIpAddress")
+                print(f" ✅ ({private_ip})")
+                return private_ip
+            elif state in ("terminated", "shutting-down"):
+                print(f" ❌ ({state})")
+                return None
+        except ClientError as e:
+            if "InvalidInstanceID.NotFound" in str(e):
+                # Eventual consistency — instance not yet visible, retry
+                pass
+            else:
+                raise
         print(".", end="", flush=True)
         time.sleep(10)
     print(f" ⏰ timeout")
@@ -284,18 +321,18 @@ def ssh_run(private_ip, command, timeout=None):
     return subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
 
 
-def scp_to(private_ip, local_path, remote_path):
-    """Copy file to remote instance."""
+def scp_to(private_ip, local_path, remote_path, timeout=1800):
+    """Copy file to remote instance. Default 30min timeout for large transfers (model weights)."""
     cmd = [
         "scp", "-o", "StrictHostKeyChecking=no",
         "-i", str(SSH_KEY_PATH),
         "-r", str(local_path),
         f"ubuntu@{private_ip}:{remote_path}",
     ]
-    return subprocess.run(cmd, capture_output=True, text=True, timeout=300)
+    return subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
 
 
-def scp_from(private_ip, remote_path, local_path):
+def scp_from(private_ip, remote_path, local_path, timeout=600):
     """Copy file from remote instance."""
     cmd = [
         "scp", "-o", "StrictHostKeyChecking=no",
@@ -303,7 +340,105 @@ def scp_from(private_ip, remote_path, local_path):
         "-r", f"ubuntu@{private_ip}:{remote_path}",
         str(local_path),
     ]
-    return subprocess.run(cmd, capture_output=True, text=True, timeout=300)
+    return subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+
+
+def rsync_from(private_ip, remote_path, local_path, timeout=600):
+    """Rsync from remote instance. Incremental, resumable, only transfers changes.
+
+    Used by the watcher thread for periodic checkpoint mirroring. If rsync is not
+    installed on the instance (rare on DLAMI), this still works because rsync
+    only needs to be installed on the SENDING side for pull mode... actually no,
+    rsync needs to be on BOTH sides. DLAMI Ubuntu 24.04 has rsync by default.
+    """
+    Path(local_path).mkdir(parents=True, exist_ok=True)
+    cmd = [
+        "rsync", "-az", "--partial", "--timeout=60",
+        "-e", f"ssh -o StrictHostKeyChecking=no -o BatchMode=yes -o ConnectTimeout=10 -i {SSH_KEY_PATH}",
+        f"ubuntu@{private_ip}:{remote_path}",
+        str(local_path),
+    ]
+    return subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+
+
+class ResultsWatcher:
+    """Periodic rsync watcher: mirrors /tmp/results/ from instance to local staging dir.
+
+    Runs in a daemon thread. Polls every `interval_secs` (default 300s = 5min).
+    Stops when stop_event is set. On SSH failure, logs and keeps trying — the
+    next successful poll picks up any new files. This is the v9 fix: ensures we
+    have an up-to-date partial copy even if SSH dies / spot reclaim / timeout
+    fires before the final scp_from would run.
+
+    Trade-off vs S3 staging: needs SSH alive at SOME point during training; if
+    SSH is dead the entire run, watcher saves nothing. But for the v9 failure
+    mode (training succeeded, SSH died ONLY at the very end), watcher saves the
+    last checkpoint that was written more than `interval_secs` before SSH death.
+    """
+
+    def __init__(self, private_ip, remote_path, local_path, interval_secs=300, task_name="unknown"):
+        self.private_ip = private_ip
+        self.remote_path = remote_path  # e.g. "/tmp/results/"
+        self.local_path = Path(local_path)
+        self.interval_secs = interval_secs
+        self.task_name = task_name
+        self.stop_event = threading.Event()
+        self.thread = None
+        self.sync_count = 0
+        self.last_success_ts = None
+        self.last_error = None
+
+    def _loop(self):
+        # Wait a bit before first sync — task probably hasn't written anything yet
+        self.stop_event.wait(min(60, self.interval_secs))
+        while not self.stop_event.is_set():
+            try:
+                r = rsync_from(self.private_ip, self.remote_path, str(self.local_path), timeout=120)
+                if r.returncode == 0:
+                    self.sync_count += 1
+                    self.last_success_ts = datetime.now(timezone.utc).isoformat()
+                    # Quiet success — only print every 6th sync (~30min) to avoid log spam
+                    if self.sync_count % 6 == 1:
+                        print(f"  🪞 [watcher] sync #{self.sync_count} ok @ {self.last_success_ts}")
+                else:
+                    self.last_error = r.stderr[-200:] if r.stderr else f"rc={r.returncode}"
+                    # Only print transient errors occasionally
+                    if self.sync_count == 0 or self.sync_count % 12 == 0:
+                        print(f"  🪞 [watcher] sync transient fail: {self.last_error}")
+            except subprocess.TimeoutExpired:
+                self.last_error = "rsync timeout"
+            except Exception as e:
+                self.last_error = f"{type(e).__name__}: {e}"
+            # Wait interval, but break early if stop requested
+            self.stop_event.wait(self.interval_secs)
+
+    def start(self):
+        self.local_path.mkdir(parents=True, exist_ok=True)
+        self.thread = threading.Thread(target=self._loop, daemon=True, name=f"watcher-{self.task_name}")
+        self.thread.start()
+        print(f"  🪞 [watcher] started: every {self.interval_secs}s, {self.private_ip}:{self.remote_path} → {self.local_path}")
+
+    def stop(self, timeout=10):
+        if self.thread is None:
+            return
+        self.stop_event.set()
+        self.thread.join(timeout=timeout)
+        status = "alive" if self.thread.is_alive() else "stopped"
+        print(f"  🪞 [watcher] {status}. syncs={self.sync_count}, last_ok={self.last_success_ts}, last_err={self.last_error}")
+
+    def final_sync(self, timeout=300):
+        """One final rsync attempt before instance termination. Returns True on success."""
+        try:
+            r = rsync_from(self.private_ip, self.remote_path, str(self.local_path), timeout=timeout)
+            if r.returncode == 0:
+                print(f"  🪞 [watcher] final sync OK")
+                return True
+            else:
+                print(f"  🪞 [watcher] final sync failed: {r.stderr[-300:] if r.stderr else r.returncode}")
+                return False
+        except Exception as e:
+            print(f"  🪞 [watcher] final sync exception: {e}")
+            return False
 
 
 def terminate_instance(ec2, instance_id):
@@ -388,7 +523,9 @@ def main():
     parser.add_argument("--max-hours", type=float, default=MAX_RUNTIME_HOURS, help="Max runtime hours (default 4, >4 requires approval)")
     parser.add_argument("--request-extension", action="store_true", help="Generate extension request with cost/time estimates")
     parser.add_argument("--approval-code", help="Approval code from human for extended runs (>4h)")
+    parser.add_argument("--on-demand", action="store_true", help="Skip spot attempts, launch on-demand directly (3x more expensive but no reclaim risk)")
     parser.add_argument("--pre-scp", action="append", default=[], help="Extra files to SCP before running script. Format: local_path:remote_path")
+    parser.add_argument("--watch-interval", type=int, default=300, help="Periodic rsync interval in seconds (default 300 = 5min). v9 fix: protects against SSH death / spot reclaim / launcher timeout.")
     args = parser.parse_args()
 
     ec2 = get_ec2()
@@ -548,7 +685,7 @@ def main():
         sg_id = ensure_security_group(ec2)
 
         # Launch
-        instance_id = launch_spot(ec2, args.instance, sg_id, args.task)
+        instance_id = launch_spot(ec2, args.instance, sg_id, args.task, force_on_demand=args.on_demand)
 
         # Wait for ready
         private_ip = wait_for_running(ec2, instance_id)
@@ -573,13 +710,36 @@ def main():
                 scp_to(private_ip, local, remote)
 
             print(f"\n📦 Copying script...")
-            scp_to(private_ip, args.script, "/tmp/run_task.sh")
-            ssh_run(private_ip, "chmod +x /tmp/run_task.sh")
+            scp_result = scp_to(private_ip, args.script, "/tmp/run_task.sh")
+            if scp_result.returncode != 0:
+                print(f"❌ Script SCP failed (exit {scp_result.returncode}):")
+                print(f"  stderr: {scp_result.stderr[-500:]}")
+                raise RuntimeError("Script copy failed")
+            # Verify on instance
+            verify = ssh_run(private_ip, "ls -la /tmp/run_task.sh && head -1 /tmp/run_task.sh && file /tmp/run_task.sh")
+            print(f"  Remote script: {verify.stdout.strip()}")
+            chmod_result = ssh_run(private_ip, "chmod +x /tmp/run_task.sh")
+            if chmod_result.returncode != 0:
+                print(f"❌ chmod failed: {chmod_result.stderr[-200:]}")
+
+            # === START PERIODIC RESULTS WATCHER (v9 fix) ===
+            # Mirrors /tmp/results/ from instance to local staging dir every 5 min.
+            # Survives SSH death, spot reclaim, launcher timeout. The final scp_from
+            # is now a belt-and-suspenders — watcher is the actual durability guarantee.
+            results_dir = WORKSPACE / "logs" / "gpu-results" / args.task
+            watcher = ResultsWatcher(
+                private_ip=private_ip,
+                remote_path="/tmp/results/",
+                local_path=results_dir,
+                interval_secs=args.watch_interval,
+                task_name=args.task,
+            )
+            watcher.start()
 
             print(f"\n🏃 Running task (max {args.max_hours}h)...")
             timeout_secs = int(args.max_hours * 3600)
             try:
-                r = ssh_run(private_ip, "/tmp/run_task.sh", timeout=timeout_secs)
+                r = ssh_run(private_ip, "bash /tmp/run_task.sh", timeout=timeout_secs)
                 print(r.stdout[-2000:] if len(r.stdout) > 2000 else r.stdout)
                 if r.stderr:
                     print(f"STDERR: {r.stderr[-1000:]}")
@@ -588,11 +748,11 @@ def main():
                 result = "TIMEOUT"
                 print(f"⏰ Task exceeded {args.max_hours}h limit")
 
-            # Collect results
-            print(f"\n📥 Collecting results...")
-            results_dir = WORKSPACE / "logs" / "gpu-results" / args.task
+            # Stop watcher and do a final sync attempt (instance may still be alive)
+            watcher.stop()
+            print(f"\n📥 Final sync attempt...")
             results_dir.mkdir(parents=True, exist_ok=True)
-            scp_from(private_ip, "/tmp/results/", str(results_dir))
+            watcher.final_sync()
         else:
             print(f"\n⚠️  No --script provided. Instance is running at {private_ip}")
             print(f"    SSH: ssh -i {SSH_KEY_PATH} ubuntu@{private_ip}")
