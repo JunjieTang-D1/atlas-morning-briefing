@@ -20,7 +20,7 @@ import re
 import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Optional
 
 import yaml
 
@@ -44,7 +44,7 @@ except ImportError:
     logger.warning("DeepXiv SDK not installed, falling back to legacy ArXiv API")
 
 
-def _load_deepxiv_token() -> str | None:
+def _load_deepxiv_token() -> Optional[str]:
     """Load DeepXiv token from ~/.env or environment."""
     import os
     token = os.environ.get("DEEPXIV_TOKEN")
@@ -109,7 +109,7 @@ class DeepXivScanner:
             logger.error(f"DeepXiv search failed for '{topic}': {e}")
             return []
 
-    def _normalize_result(self, data: dict[str, Any]) -> dict[str, Any] | None:
+    def _normalize_result(self, data: dict[str, Any]) -> Optional[dict[str, Any]]:
         """Normalize a DeepXiv search result to our standard format."""
         try:
             arxiv_id = data.get("arxiv_id", data.get("id", ""))
@@ -237,7 +237,7 @@ class ArxivScanner:
 
     ARXIV_API_URL = "http://export.arxiv.org/api/query"
 
-    def __init__(self, topics: list[str], days_back: int = 7, max_results: int = 20):
+    def __init__(self, topics: list[str], days_back: int = 14, max_results: int = 50):
         self.topics = topics
         self.days_back = days_back
         self.max_results = max_results
@@ -251,7 +251,8 @@ class ArxivScanner:
             end_date = datetime.now(timezone.utc)
             start_date = end_date - timedelta(days=self.days_back)
 
-            query = f"all:{topic}"
+            # 多词主题用精确短语，避免被 arxiv 拆成松散布尔查询
+            query = f'all:"{topic}"' if " " in topic.strip() else f"all:{topic}"
             params = {
                 "search_query": query,
                 "start": 0,
@@ -295,12 +296,12 @@ class ArxivScanner:
                 if not pdf_link and paper_id is not None and paper_id.text:
                     pdf_link = paper_id.text.replace("/abs/", "/pdf/") + ".pdf"
 
-                if published is not None and published.text:
-                    pub_date = datetime.fromisoformat(published.text.replace("Z", "+00:00"))
-                    if pub_date < start_date:
+                # 优先用 updated 判断新鲜度；缺失才回退 published；都缺失则保留
+                date_el = updated if (updated is not None and updated.text) else published
+                if date_el is not None and date_el.text:
+                    ref_date = datetime.fromisoformat(date_el.text.replace("Z", "+00:00"))
+                    if ref_date < start_date:
                         continue
-                else:
-                    continue
 
                 papers.append({
                     "id": paper_id.text.strip() if paper_id is not None else "",
