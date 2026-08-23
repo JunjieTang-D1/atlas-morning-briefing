@@ -56,7 +56,7 @@ Supports **Claude Sonnet 4, Kimi K2.5, GLM 4.7, DeepSeek V3.2, Nova Pro, and Nov
 ### Install
 
 ```bash
-git clone https://github.com/your-org/atlas-morning-briefing.git
+git clone https://github.com/JunjieTang-D1/atlas-morning-briefing.git
 cd atlas-morning-briefing
 python3 -m venv venv
 source venv/bin/activate
@@ -99,6 +99,7 @@ export GMAIL_APP_PASSWORD="your_app_password"
 ```
 
 See `references/config_guide.md` for all configuration options.
+See `references/kirocrew_setup.md` to install and schedule this as a KiroCrew skill.
 
 ### Run
 

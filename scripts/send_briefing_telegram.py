@@ -2,14 +2,17 @@
 """
 Send today's morning briefing PDF + summary to Telegram.
 
-Usage: python3 send_briefing_telegram.py [--chat-id 7906755579]
+Usage: python3 send_briefing_telegram.py --chat-id <CHAT_ID>
 
-Assumes briefing already generated to /home/ubuntu/.openclaw/workspace/atlas-morning-briefing/
-Looks for the newest Atlas-Briefing-*.pdf and sends as a document + sends the markdown
-executive summary as a separate text message (truncated to 3500 chars).
+Looks for the newest Atlas-Briefing-*.pdf in the briefing directory and sends it
+as a document, then sends the markdown executive summary as separate text message(s).
 
-Env:
-  TELEGRAM_BOT_TOKEN (read from ~/.openclaw/.env)
+Configuration (all via environment, no hardcoded personal values):
+  TELEGRAM_BOT_TOKEN   Bot token (required).
+  TELEGRAM_CHAT_ID     Target chat ID (used if --chat-id is not passed).
+  ATLAS_BRIEFING_DIR   Directory holding the generated briefing files
+                       (default: the repo root, i.e. the parent of this script's dir).
+  ATLAS_ENV_FILE       Optional dotenv file to load keys from (default: none).
 """
 import os
 import sys
@@ -20,13 +23,14 @@ import urllib.request
 import urllib.parse
 import urllib.error
 
-BRIEFING_DIR = Path.home() / ".openclaw/workspace/atlas-morning-briefing"
-ENV_FILE = Path.home() / ".openclaw/.env"
-DEFAULT_CHAT_ID = "7906755579"
+# Repo root = parent of the scripts/ directory this file lives in.
+_REPO_ROOT = Path(__file__).resolve().parent.parent
+BRIEFING_DIR = Path(os.environ.get("ATLAS_BRIEFING_DIR", str(_REPO_ROOT)))
+ENV_FILE = Path(os.environ["ATLAS_ENV_FILE"]) if os.environ.get("ATLAS_ENV_FILE") else None
 
 
 def load_env():
-    if not ENV_FILE.exists():
+    if not ENV_FILE or not ENV_FILE.exists():
         return
     for line in ENV_FILE.read_text().splitlines():
         line = line.strip()
@@ -159,11 +163,18 @@ def telegram_send_text(token, chat_id, text):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--chat-id", default=DEFAULT_CHAT_ID)
+    ap.add_argument("--chat-id", default=os.environ.get("TELEGRAM_CHAT_ID"),
+                    help="Target Telegram chat ID (or set TELEGRAM_CHAT_ID)")
     ap.add_argument("--pdf-only", action="store_true", help="Send only the PDF, no summary text")
     args = ap.parse_args()
 
     load_env()
+    # Re-read chat id after load_env in case it came from the dotenv file.
+    if not args.chat_id:
+        args.chat_id = os.environ.get("TELEGRAM_CHAT_ID")
+    if not args.chat_id:
+        print("❌ No chat id: pass --chat-id or set TELEGRAM_CHAT_ID", file=sys.stderr)
+        sys.exit(1)
     token = os.environ.get("TELEGRAM_BOT_TOKEN")
     if not token:
         print("❌ TELEGRAM_BOT_TOKEN not set", file=sys.stderr)
