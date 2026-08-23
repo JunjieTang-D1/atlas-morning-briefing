@@ -63,17 +63,12 @@ def extract_summary(md_path, max_chars=4000):
         return s.strip()
 
     exec_sum = grab_section(text, "## Executive Summary")
-    solo_angle = grab_section(text, "## 💡 Solo Founder Angle")
-    cost_play = grab_section(text, "## 💰 Agent Cost-Optimization Play")
+    # solo_angle and cost_play DISABLED per user request (2026-08-23)
     top_papers = grab_section(text, "## Top Papers")
 
     blocks = []
     if exec_sum:
         blocks.append("📊 *Atlas Morning Briefing*\n\n" + exec_sum)
-    if solo_angle:
-        blocks.append("*💡 Solo Founder Angle*\n\n" + solo_angle)
-    if cost_play:
-        blocks.append("*💰 Agent Cost-Optimization Play*\n\n" + cost_play)
     if top_papers:
         blocks.append("*📑 Top Papers*\n\n" + top_papers)
 
