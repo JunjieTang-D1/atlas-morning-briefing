@@ -63,7 +63,6 @@ def extract_summary(md_path, max_chars=4000):
         return s.strip()
 
     exec_sum = grab_section(text, "## Executive Summary")
-    # solo_angle and cost_play DISABLED per user request (2026-08-23)
     top_papers = grab_section(text, "## Top Papers")
 
     blocks = []
