@@ -204,7 +204,7 @@ class EmailDistributor:
 {html_body}
 <div class="footer">
   Atlas Morning Briefing<br>
-  <a href="https://github.com/your-org/atlas-morning-briefing">GitHub</a>
+  <a href="https://github.com/JunjieTang-D1/atlas-morning-briefing">GitHub</a>
 </div>
 </div>
 </body>
