@@ -1029,7 +1029,7 @@ class BriefingIntelligence:
         )
 
         result = self.bedrock.invoke(
-            prompt, tier="heavy", max_tokens=1000, system_prompt=SYSTEM_PROMPT
+            prompt, tier="heavy", max_tokens=4000, system_prompt=SYSTEM_PROMPT
         )
         if not result:
             return {}

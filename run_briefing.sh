@@ -36,6 +36,16 @@ fi
 
 ATLAS_CONFIG="${ATLAS_CONFIG:-$ATLAS_HOME/config.yaml}"
 
+# Atomic lock guard: mkdir is atomic, so only one run at a time may proceed.
+# Prevents the concurrent-trigger stampede where the rm -f below deletes another
+# run's in-flight artifacts (symptom: ~10s run, missing Executive Summary).
+LOCK_DIR="$ATLAS_HOME/.atlas-run.lock"
+if ! mkdir "$LOCK_DIR" 2>/dev/null; then
+    echo "ERROR: Another briefing run is in progress ($LOCK_DIR exists). Aborting." >&2
+    exit 1
+fi
+trap 'rmdir "$LOCK_DIR" 2>/dev/null || true' EXIT
+
 # Clean previous run artifacts.
 rm -f Atlas-Briefing-*.md Atlas-Briefing-*.pdf status.json
 
