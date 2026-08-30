@@ -205,25 +205,44 @@ class BriefingRunner:
             return []
 
     def score_papers(self, papers: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        """Score and rank papers."""
-        try:
-            if not papers:
-                return []
+        """Score and rank papers.
 
-            logger.info("=== Scoring Papers ===")
-            topics = self.config.get("arxiv_topics", [])
-            weights = self.config.get("paper_scoring", {})
-            num_picks = self.config.get("num_paper_picks", 3)
-
-            scorer = PaperScorer(topics=topics, weights=weights, num_picks=num_picks)
-            top_papers = scorer.get_top_picks(papers)
-            logger.info(f"Selected top {len(top_papers)} papers")
-            return top_papers
-
-        except Exception as e:
-            logger.error(f"Paper scoring failed: {e}")
-            self.errors.append(f"Paper scoring: {e}")
+        Retries the local scorer on transient failure, and — since a missing
+        Top Papers section is worse than an unscored one — falls back to a
+        recency-ordered slice so the section is never silently dropped.
+        """
+        if not papers:
             return []
+
+        topics = self.config.get("arxiv_topics", [])
+        weights = self.config.get("paper_scoring", {})
+        num_picks = self.config.get("num_paper_picks", 3)
+
+        last_err = None
+        for attempt in (1, 2, 3):
+            try:
+                logger.info(f"=== Scoring Papers (attempt {attempt}) ===")
+                scorer = PaperScorer(topics=topics, weights=weights, num_picks=num_picks)
+                top_papers = scorer.get_top_picks(papers)
+                if top_papers:
+                    logger.info(f"Selected top {len(top_papers)} papers")
+                    return top_papers
+                logger.warning(f"Paper scoring attempt {attempt} returned empty; retrying")
+            except Exception as e:  # noqa: BLE001
+                last_err = e
+                logger.error(f"Paper scoring attempt {attempt} failed: {e}")
+
+        # Fallback: never drop the section. Order by newest published date and
+        # take num_picks so downstream enrichment/render still has candidates.
+        def _pub(p):
+            return p.get("published", "") or p.get("updated", "") or ""
+        fallback = sorted(papers, key=_pub, reverse=True)[:num_picks]
+        msg = f"Paper scoring fell back to recency ordering ({len(fallback)} papers)"
+        if last_err:
+            msg += f" after error: {last_err}"
+        logger.warning(msg)
+        self.errors.append(msg)
+        return fallback
 
     def deduplicate_news_and_blogs(
         self,
@@ -653,7 +672,9 @@ class BriefingRunner:
         sorted_papers = sorted(top_papers[:num_picks], key=lambda x: x.get("score_combined", 0), reverse=True)
         # Only filter by score when scores are present (Bedrock enabled)
         if any(p.get("score_combined") for p in sorted_papers):
-            sorted_papers = [p for p in sorted_papers if p.get("score_combined", 0) >= 3]
+            filtered = [p for p in sorted_papers if p.get("score_combined", 0) >= 3]
+            # Never let the score gate empty the whole section — keep top picks.
+            sorted_papers = filtered or sorted_papers[:num_picks]
         for i, paper in enumerate(sorted_papers, 1):
             paper_title = paper.get("title", "")
             authors = paper.get("authors", [])
