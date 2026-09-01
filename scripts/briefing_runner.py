@@ -506,7 +506,7 @@ class BriefingRunner:
             f"<stock_data>\n{data_block}\n</stock_data>"
         )
         result = self.intelligence.bedrock.invoke(
-            prompt, tier="light", max_tokens=150
+            prompt, tier="light", max_tokens=500
         )
         return result.strip() if result else ""
 
@@ -647,7 +647,7 @@ class BriefingRunner:
             "Be factual. Do not add information not in the abstract."
         )
         result = self.intelligence.bedrock.invoke(
-            prompt, tier="light", max_tokens=500
+            prompt, tier="light", max_tokens=1200
         )
         if not result:
             return papers
