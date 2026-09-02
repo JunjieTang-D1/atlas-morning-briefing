@@ -324,20 +324,36 @@ class ArxivScanner:
             return []
 
     def scan_all_topics(self) -> list[dict[str, Any]]:
-        """Scan all topics, deduplicate."""
-        all_papers = []
-        seen_ids: set[str] = set()
+        """Scan all topics, deduplicate. Retries once if the whole scan yields
+        zero papers, since arxiv.org intermittently rate-limits/times-out a run
+        and a 0-paper result silently drops the Top Papers section."""
+        import time as _time
 
-        for topic in self.topics:
-            papers = self.search_topic(topic)
-            for paper in papers:
-                paper_id = paper.get("id", "")
-                if paper_id and paper_id not in seen_ids:
-                    all_papers.append(paper)
-                    seen_ids.add(paper_id)
+        for attempt in range(1, 3):  # up to 2 attempts
+            all_papers = []
+            seen_ids: set[str] = set()
 
-        logger.info(f"Total unique papers: {len(all_papers)}")
-        return all_papers
+            for topic in self.topics:
+                papers = self.search_topic(topic)
+                for paper in papers:
+                    paper_id = paper.get("id", "")
+                    if paper_id and paper_id not in seen_ids:
+                        all_papers.append(paper)
+                        seen_ids.add(paper_id)
+
+            if all_papers:
+                logger.info(f"Total unique papers: {len(all_papers)} (attempt {attempt})")
+                return all_papers
+
+            if attempt < 2:
+                logger.warning(
+                    "ArXiv scan returned 0 papers across all topics — "
+                    "likely a transient API failure; retrying once after 15s"
+                )
+                _time.sleep(15)
+
+        logger.error("ArXiv scan returned 0 papers after retry; Top Papers will be empty")
+        return []
 
 
 # ── Factory function ──
