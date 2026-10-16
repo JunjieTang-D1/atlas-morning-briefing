@@ -1,0 +1,48 @@
+{
+  "name": "atlas-briefing",
+  "displayName": "Atlas Briefing",
+  "version": "2.1.0",
+  "description": "Dashboard for the Atlas Morning Briefing pipeline: run health, hot topics, deep-dive research topics, a knowledge-graph view, and a 7-day rollup.",
+  "author": "JunjieTang-D1",
+  "iconPath": "ui/icon.svg",
+  "iconUrl": "ui/icon.svg",
+  "tags": [
+    "briefing",
+    "research",
+    "arxiv",
+    "dashboard",
+    "atlas"
+  ],
+  "permissions": {
+    "api": [
+      "/api/apps/atlas-briefing/overview",
+      "/api/apps/atlas-briefing/weekly",
+      "/api/apps/atlas-briefing/knowledge-graph",
+      "/api/apps/atlas-briefing/research-topics",
+      "/api/apps/atlas-briefing/*"
+    ],
+    "mcpTools": [
+      "local_knowledge_search",
+      "knowledge_list_sources",
+      "artifact_list",
+      "artifact_get"
+    ],
+    "network": false,
+    "cron": false
+  },
+  "ui": {
+    "entry": "index.mjs",
+    "pages": [
+      {
+        "route": "/apps/atlas-briefing",
+        "label": "Atlas Briefing",
+        "iconUrl": "icon.svg"
+      }
+    ]
+  },
+  "backend": {
+    "hooks": {
+      "routes": "backend.routes:register_routes"
+    }
+  }
+}
