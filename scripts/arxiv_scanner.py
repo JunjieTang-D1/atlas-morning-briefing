@@ -237,15 +237,77 @@ class ArxivScanner:
 
     ARXIV_API_URL = "http://export.arxiv.org/api/query"
 
+    # arXiv asks callers to pace requests (~1 req / 3s). Firing all topic
+    # queries back-to-back is what triggers the HTTP 429 cascade that stalls
+    # the whole run past its timeout (and leaves a stale lock behind). We
+    # therefore serialize requests with a minimum interval + honor Retry-After
+    # with exponential backoff on 429, instead of hammering and blind-retrying.
+    _MIN_REQUEST_INTERVAL_S = 3.5
+    _MAX_RETRIES = 4
+    _last_request_ts = 0.0
+
     def __init__(self, topics: list[str], days_back: int = 14, max_results: int = 50):
         self.topics = topics
         self.days_back = days_back
         self.max_results = max_results
 
+    def _throttled_get(self, params: dict[str, Any]) -> "Any":
+        """GET the arXiv API respecting a minimum inter-request interval and
+        retrying on 429 / transient network errors with exponential backoff.
+        Honors a Retry-After header when arXiv supplies one. Raises on final
+        failure so the caller's existing except-branch handles it."""
+        import time as _time
+
+        import requests
+
+        for attempt in range(1, self._MAX_RETRIES + 1):
+            # Pace: never issue two requests closer than _MIN_REQUEST_INTERVAL_S.
+            elapsed = _time.monotonic() - ArxivScanner._last_request_ts
+            if elapsed < self._MIN_REQUEST_INTERVAL_S:
+                _time.sleep(self._MIN_REQUEST_INTERVAL_S - elapsed)
+
+            try:
+                response = requests.get(self.ARXIV_API_URL, params=params, timeout=30)
+                ArxivScanner._last_request_ts = _time.monotonic()
+            except requests.exceptions.RequestException as e:
+                # Transient network error (read timeout / connection reset).
+                if attempt >= self._MAX_RETRIES:
+                    raise
+                backoff = min(self._MIN_REQUEST_INTERVAL_S * (2 ** attempt), 60.0)
+                logger.warning(
+                    f"ArXiv request network error ({e}); backoff {backoff:.0f}s "
+                    f"(attempt {attempt}/{self._MAX_RETRIES})"
+                )
+                _time.sleep(backoff)
+                continue
+
+            if response.status_code == 429:
+                if attempt >= self._MAX_RETRIES:
+                    response.raise_for_status()
+                retry_after = response.headers.get("Retry-After")
+                try:
+                    wait_s = float(retry_after) if retry_after else min(
+                        self._MIN_REQUEST_INTERVAL_S * (2 ** attempt), 60.0
+                    )
+                except ValueError:
+                    wait_s = min(self._MIN_REQUEST_INTERVAL_S * (2 ** attempt), 60.0)
+                logger.warning(
+                    f"ArXiv 429 rate-limited; backoff {wait_s:.0f}s "
+                    f"(attempt {attempt}/{self._MAX_RETRIES})"
+                )
+                _time.sleep(wait_s)
+                continue
+
+            response.raise_for_status()
+            return response
+
+        # Loop exhausted without returning (shouldn't reach here — the last
+        # attempt either returns or raises above), but be explicit.
+        raise RuntimeError("ArXiv request retries exhausted")
+
     def search_topic(self, topic: str) -> list[dict[str, Any]]:
         """Search ArXiv API for papers on a topic."""
         try:
-            import requests
             from xml.etree import ElementTree as ET
 
             end_date = datetime.now(timezone.utc)
@@ -262,8 +324,7 @@ class ArxivScanner:
             }
 
             logger.info(f"Legacy ArXiv search: {topic}")
-            response = requests.get(self.ARXIV_API_URL, params=params, timeout=30)
-            response.raise_for_status()
+            response = self._throttled_get(params)
 
             papers = []
             root = ET.fromstring(response.text)
@@ -332,9 +393,31 @@ class ArxivScanner:
         for attempt in range(1, 3):  # up to 2 attempts
             all_papers = []
             seen_ids: set[str] = set()
+            consecutive_failures = 0
 
             for topic in self.topics:
-                papers = self.search_topic(topic)
+                try:
+                    papers = self.search_topic(topic)
+                except Exception:  # pragma: no cover - defensive; search_topic already logs
+                    papers = []
+                if papers:
+                    consecutive_failures = 0
+                else:
+                    consecutive_failures += 1
+                    # Circuit breaker: a run of empty/failed topics means arXiv is
+                    # storm-throttling this IP (429s) or down. Grinding through all
+                    # remaining topics × per-request backoff blows the run's timeout
+                    # and produces NOTHING (the whole briefing dies). Abort the scan
+                    # early and let the other sections ship without Top Papers.
+                    if consecutive_failures >= 4:
+                        logger.error(
+                            "ArXiv circuit breaker tripped: %d consecutive topic "
+                            "failures (rate-limit storm/outage) — aborting scan with "
+                            "%d papers so far; the briefing ships without Top Papers.",
+                            consecutive_failures,
+                            len(all_papers),
+                        )
+                        break
                 for paper in papers:
                     paper_id = paper.get("id", "")
                     if paper_id and paper_id not in seen_ids:
@@ -345,12 +428,17 @@ class ArxivScanner:
                 logger.info(f"Total unique papers: {len(all_papers)} (attempt {attempt})")
                 return all_papers
 
-            if attempt < 2:
+            # If the breaker tripped this attempt, a whole-scan retry would just
+            # re-trip it — don't. Only retry a genuinely empty (not storm-aborted)
+            # first pass, after a long cooldown.
+            if attempt < 2 and consecutive_failures < 4:
                 logger.warning(
                     "ArXiv scan returned 0 papers across all topics — "
-                    "likely a transient API failure; retrying once after 15s"
+                    "likely a sustained API failure; retrying once after 60s"
                 )
-                _time.sleep(15)
+                _time.sleep(60)
+            else:
+                break
 
         logger.error("ArXiv scan returned 0 papers after retry; Top Papers will be empty")
         return []

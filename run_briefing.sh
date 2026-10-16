@@ -41,10 +41,25 @@ ATLAS_CONFIG="${ATLAS_CONFIG:-$ATLAS_HOME/config.yaml}"
 # run's in-flight artifacts (symptom: ~10s run, missing Executive Summary).
 LOCK_DIR="$ATLAS_HOME/.atlas-run.lock"
 if ! mkdir "$LOCK_DIR" 2>/dev/null; then
-    echo "ERROR: Another briefing run is in progress ($LOCK_DIR exists). Aborting." >&2
-    exit 1
+    # A lock exists. It is only legitimate if a briefing_runner is actually
+    # alive: a run killed by `timeout`/SIGKILL bypasses the EXIT trap below and
+    # leaves a DEAD lock that would otherwise block every future run forever
+    # (observed: a timed-out arXiv-throttled run blocked the next day's cron).
+    # If no live briefing_runner process exists, reclaim the stale lock.
+    if pgrep -f "briefing_runner" >/dev/null 2>&1; then
+        echo "ERROR: Another briefing run is in progress ($LOCK_DIR exists). Aborting." >&2
+        exit 1
+    fi
+    echo "WARN: stale lock $LOCK_DIR found with no live briefing_runner — reclaiming." >&2
+    rmdir "$LOCK_DIR" 2>/dev/null || true
+    if ! mkdir "$LOCK_DIR" 2>/dev/null; then
+        echo "ERROR: Could not acquire lock $LOCK_DIR after reclaim. Aborting." >&2
+        exit 1
+    fi
 fi
-trap 'rmdir "$LOCK_DIR" 2>/dev/null || true' EXIT
+# Release the lock on ANY exit, including SIGTERM/SIGINT (timeout sends TERM).
+# A bare EXIT trap does not fire on an uncaught signal, so trap the signals too.
+trap 'rmdir "$LOCK_DIR" 2>/dev/null || true' EXIT INT TERM
 
 # Clean previous run artifacts.
 rm -f Atlas-Briefing-*.md Atlas-Briefing-*.pdf status.json
