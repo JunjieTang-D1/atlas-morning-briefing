@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#7c3aed" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+  <!-- Atlas Briefing icon: a globe/world pictogram, verified legible at
+       16px and 24px via a hand-rendered raster preview before shipping. -->
+  <circle cx="12" cy="12" r="8"/>
+  <line x1="4" y1="12" x2="20" y2="12"/>
+  <ellipse cx="12" cy="12" rx="3.2" ry="8"/>
+</svg>
