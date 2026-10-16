@@ -627,7 +627,7 @@ class BriefingIntelligence:
         )
 
         result = self.bedrock.invoke(
-            prompt, tier="medium", max_tokens=1000, system_prompt=SYSTEM_PROMPT
+            prompt, tier="medium", max_tokens=2000, system_prompt=SYSTEM_PROMPT
         )
         if not result:
             return news[:5]
@@ -654,7 +654,7 @@ class BriefingIntelligence:
         retry_result = self.bedrock.invoke(
             f"From these articles, pick the 5 most important for an AI researcher. "
             f"Format EXACTLY as: [number] summary sentence.\n\n{articles_block}",
-            tier="medium", max_tokens=800, system_prompt=SYSTEM_PROMPT
+            tier="medium", max_tokens=1600, system_prompt=SYSTEM_PROMPT
         )
         if retry_result:
             parsed_retry = self._parse_ranked_response(retry_result)
@@ -715,7 +715,7 @@ class BriefingIntelligence:
         )
 
         result = self.bedrock.invoke(
-            prompt, tier="light", max_tokens=800, system_prompt=SYSTEM_PROMPT
+            prompt, tier="light", max_tokens=1600, system_prompt=SYSTEM_PROMPT
         )
         if not result:
             return blogs[:5]
@@ -1029,7 +1029,7 @@ class BriefingIntelligence:
         )
 
         result = self.bedrock.invoke(
-            prompt, tier="heavy", max_tokens=1000, system_prompt=SYSTEM_PROMPT
+            prompt, tier="heavy", max_tokens=4000, system_prompt=SYSTEM_PROMPT
         )
         if not result:
             return {}

@@ -211,9 +211,14 @@ class BedrockClient:
             body = {
                 "anthropic_version": "bedrock-2023-05-31",
                 "max_tokens": max_tokens,
-                "temperature": temperature,
                 "messages": messages,
             }
+            # Claude 5-series (Sonnet 5 / Opus 5 / Fable 5) rejects `temperature`
+            # with a ValidationException ("temperature is deprecated for this
+            # model"). Only send temperature to models that still accept it.
+            _no_temp = any(m in model_id for m in ("sonnet-5", "opus-5", "fable-5"))
+            if not _no_temp:
+                body["temperature"] = temperature
             if system_prompt:
                 body["system"] = system_prompt
         elif "amazon.nova" in model_id:
