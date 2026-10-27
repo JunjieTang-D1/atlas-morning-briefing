@@ -244,7 +244,7 @@
   <text x="705" y="742" text-anchor="middle" fill="#a78bfa" font-size="8">expansion, ranking</text>
 
   <!-- Model names -->
-  <text x="540" y="770" text-anchor="middle" fill="#94a3b8" font-size="9">Claude Sonnet 4  |  Kimi K2.5  |  GLM 4.7  |  DeepSeek V3.2  |  Nova Pro  |  Nova Lite</text>
+  <text x="540" y="770" text-anchor="middle" fill="#94a3b8" font-size="9">Claude Sonnet 5.5  |  Kimi K2.5  |  GLM 4.7  |  DeepSeek V3.2  |  Nova Pro  |  Nova Lite</text>
   <text x="540" y="784" text-anchor="middle" fill="#64748b" font-size="9">Switch models in one line of config  |  ~$0.40-0.80/run  |  bedrock_client.py + intelligence.py</text>
 
   <!-- ============================================ -->

@@ -296,7 +296,7 @@ bedrock:
   temperature: 0.3
   max_tokens: 2048
   models:
-    heavy: "us.anthropic.claude-sonnet-4-20250514-v1:0"
+    heavy: "us.anthropic.claude-sonnet-5-5"
     medium: "amazon.nova-pro-v1:0"
     light: "amazon.nova-lite-v1:0"
 ```
@@ -317,7 +317,7 @@ bedrock:
 - **Estimated: ~$0.40-0.80/run, ~$12-24/month**
 
 For lower cost, switch to tiered models:
-- Heavy (Claude Sonnet 4): ~$0.06
+- Heavy (Claude Sonnet 4, the previous default): ~$0.06
 - Medium (Nova Pro): ~$0.03
 - Light (Nova Lite): ~$0.001
 - **Tiered total: ~$0.08/run, ~$2.45/month**
@@ -326,7 +326,7 @@ For lower cost, switch to tiered models:
 
 | Model | ID | Recommended Tier |
 |---|---|---|
-| Claude Sonnet 4 | `us.anthropic.claude-sonnet-4-20250514-v1:0` | heavy |
+| Claude Sonnet 5.5 | `us.anthropic.claude-sonnet-5-5` | heavy |
 | Nova Pro | `amazon.nova-pro-v1:0` | medium |
 | Nova Lite | `amazon.nova-lite-v1:0` | light |
 | Kimi K2.5 | `moonshotai.kimi-k2.5` | heavy/medium |

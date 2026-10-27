@@ -170,7 +170,7 @@ sender_email: "YOUR_EMAIL@gmail.com"
 bedrock:
   enabled: true
   models:
-    heavy: "us.anthropic.claude-sonnet-4-20250514-v1:0"
+    heavy: "us.anthropic.claude-sonnet-5-5"
     medium: "amazon.nova-pro-v1:0"
     light: "amazon.nova-lite-v1:0"
 ```
@@ -278,7 +278,7 @@ For lower cost (~$0.08/run, ~$2.45/month), switch to tiered models in `config.ya
 ```yaml
 bedrock:
   models:
-    heavy: "us.anthropic.claude-sonnet-4-20250514-v1:0"
+    heavy: "us.anthropic.claude-sonnet-5-5"
     medium: "amazon.nova-pro-v1:0"
     light: "amazon.nova-lite-v1:0"
 ```

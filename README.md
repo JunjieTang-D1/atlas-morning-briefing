@@ -4,7 +4,7 @@
 
 A fully automated morning briefing pipeline that scans ArXiv papers, RSS blogs, stock tickers, and news headlines — then uses Amazon Bedrock to synthesize everything into a Kindle-optimized PDF delivered to your inbox before you wake up.
 
-Supports **Claude Sonnet 4, Kimi K2.5, GLM 4.7, DeepSeek V3.2, Nova Pro, and Nova Lite** on Amazon Bedrock. Switch models in one line of config. Runs without AWS credentials in deterministic mode at zero cost.
+Supports **Claude Sonnet 5.5, Kimi K2.5, GLM 4.7, DeepSeek V3.2, Nova Pro, and Nova Lite** on Amazon Bedrock. Switch models in one line of config. Runs without AWS credentials in deterministic mode at zero cost.
 
 ## What It Does
 
@@ -203,8 +203,8 @@ The intelligence layer uses a **tiered model strategy** — heavier models for r
 
 | Tier | Used For | Example Models |
 |---|---|---|
-| **Heavy** | Editorial synthesis, stock-news correlation, weekly deep dive | Claude Sonnet 4, Kimi K2.5 |
-| **Medium** | Paper summaries, semantic scoring, news ranking, reproduction assessment | Claude Sonnet 4, GLM 4.7 |
+| **Heavy** | Editorial synthesis, stock-news correlation, weekly deep dive | Claude Sonnet 5.5, Kimi K2.5 |
+| **Medium** | Paper summaries, semantic scoring, news ranking, reproduction assessment | Claude Sonnet 5.5, GLM 4.7 |
 | **Light** | Topic expansion, blog ranking, emerging themes, trending tracking | Nova Lite, DeepSeek V3.2 |
 
 ### Intelligence Features
@@ -232,12 +232,12 @@ Change one line in `config.yaml`:
 ```yaml
 bedrock:
   models:
-    heavy: "us.anthropic.claude-sonnet-4-20250514-v1:0"  # or any model below
+    heavy: "us.anthropic.claude-sonnet-5-5"  # or any model below
 ```
 
 | Model | Bedrock Model ID |
 |---|---|
-| Claude Sonnet 4 | `us.anthropic.claude-sonnet-4-20250514-v1:0` |
+| Claude Sonnet 5.5 | `us.anthropic.claude-sonnet-5-5` |
 | Kimi K2.5 | `moonshotai.kimi-k2.5` |
 | GLM 4.7 | `zai.glm-4.7` |
 | DeepSeek V3.2 | `deepseek.v3.2` |
@@ -301,7 +301,7 @@ Output formats: Markdown (`.md`), PDF (`.pdf`), and HTML email.
 | Gmail SMTP | Free | Kindle and email delivery |
 | Amazon Bedrock | ~$0.40-0.80/run (optional) | Intelligence features |
 
-**Monthly cost (daily runs):** $0 without Bedrock, ~$12-24 with Claude Sonnet 4, ~$2.45 with Nova Lite/Pro.
+**Monthly cost (daily runs):** $0 without Bedrock, ~$12-24 with Claude Sonnet 4 (measured before the switch to Sonnet 5.5), ~$2.45 with Nova Lite/Pro.
 
 ## Security
 
