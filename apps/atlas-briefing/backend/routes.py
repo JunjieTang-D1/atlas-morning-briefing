@@ -1,12 +1,15 @@
 """Atlas Briefing app backend — read-only dashboard data.
 
-This app does NOT own the briefing pipeline or its cron (that remains the
-existing script cron at ~/.kiro/crew/crons/atlas_brief.py / atlas_watchdog.py,
-job ids e5d3fd58 / 4538f3af). This backend only READS:
-  - /home/ec2-user/atlas-morning-briefing/status.json   (last-run counts/errors)
-  - /home/ec2-user/atlas-morning-briefing/config.yaml    (current topics)
-  - artifacts under the morning_briefing/ folder          (archived briefings,
-    one per day, via the gateway's own artifact store)
+This app does NOT own the briefing pipeline or its cron. This backend only READS:
+  - $ATLAS_HOME/status.json    (last-run counts/errors)
+  - $ATLAS_HOME/config.yaml    (current topics)
+  - artifacts under the gateway's artifact store (archived briefings, one per
+    day, dirs named atlas-briefing-YYYY-MM-DD)
+  - $ATLAS_RESEARCH_HOME       (optional research deep-dive inventory)
+
+Paths come from environment variables so the app works on any machine; the
+defaults match a checkout in the user's home directory. Set them in the
+gateway's environment (e.g. ~/.kiro/crew/.env) and restart the gateway.
 
 No network calls, no cron permission needed -- hence permissions.network=false
 and permissions.cron=false in app.json.
@@ -14,6 +17,7 @@ and permissions.cron=false in app.json.
 from __future__ import annotations
 
 import json
+import os
 import re
 from collections import Counter
 from datetime import datetime, timedelta, timezone
@@ -21,19 +25,28 @@ from pathlib import Path
 
 from kiro_crew.apps.route_registry import AppRoute
 
-ATLAS_HOME = Path("/home/ec2-user/atlas-morning-briefing")
+
+def _env_path(name: str, default: Path) -> Path:
+    """Path from environment variable ``name`` (``~`` expanded), else ``default``."""
+    value = os.environ.get(name, "").strip()
+    return Path(value).expanduser() if value else default
+
+
+ATLAS_HOME = _env_path("ATLAS_HOME", Path.home() / "atlas-morning-briefing")
 STATUS_FILE = ATLAS_HOME / "status.json"
 CONFIG_FILE = ATLAS_HOME / "config.yaml"
 
 # Research-papers repo (deep-dive / validated topic inventory). Read-only.
-RESEARCH_HOME = Path("/home/ec2-user/workplace/research-papers")
+# The panel is simply empty when the directory does not exist.
+RESEARCH_HOME = _env_path("ATLAS_RESEARCH_HOME", Path.home() / "workplace" / "research-papers")
 
 # Artifact store on disk. Each archived briefing is a dir
 # atlas-briefing-YYYY-MM-DD/ with meta.json + current.html (current.html holds
 # the raw markdown despite the extension). Reading these directly avoids a
 # wrong MCP import path -- the earlier bug that left the artifact-backed panels
 # empty while the pipeline/research panels (no artifact dependency) worked.
-ARTIFACTS_HOME = Path("/home/ec2-user/.kiro/crew/artifacts")
+_CREW_HOME = _env_path("KIROCREW_HOME", Path.home() / ".kiro" / "crew")
+ARTIFACTS_HOME = _env_path("ATLAS_ARTIFACTS_HOME", _CREW_HOME / "artifacts")
 
 # LLM-written weekly summary cache, refreshed by the atlas_weekly_summary.py
 # script cron (top-tier model). Served in preference to the inline regex
@@ -77,7 +90,7 @@ def _require_user(request):
 
 def _load_status() -> dict:
     try:
-        return json.loads(STATUS_FILE.read_text())
+        return json.loads(STATUS_FILE.read_text(encoding="utf-8"))
     except Exception:
         return {}
 
@@ -86,7 +99,7 @@ def _load_topics() -> list[str]:
     try:
         import yaml
 
-        cfg = yaml.safe_load(CONFIG_FILE.read_text())
+        cfg = yaml.safe_load(CONFIG_FILE.read_text(encoding="utf-8"))
         return cfg.get("arxiv_topics", [])
     except Exception:
         return []
@@ -114,7 +127,7 @@ def _read_briefing_md(slug: str) -> str:
     """Raw markdown of an archived briefing (current.html holds markdown)."""
     f = ARTIFACTS_HOME / slug / "current.html"
     try:
-        return f.read_text()
+        return f.read_text(encoding="utf-8")
     except Exception:
         return ""
 
@@ -192,7 +205,7 @@ def _read_weekly_cache() -> dict | None:
     Ignored when missing or older than ~2 days (a stale LLM blurb is worse
     than the always-current regex synthesis)."""
     try:
-        data = json.loads(WEEKLY_CACHE.read_text())
+        data = json.loads(WEEKLY_CACHE.read_text(encoding="utf-8"))
     except Exception:
         return None
     gen = data.get("generated_at")
@@ -555,7 +568,7 @@ def _real_title(child: Path) -> str:
         f = child / fname
         if f.exists():
             try:
-                m = re.search(r"^#\s+(.+)$", f.read_text(), re.MULTILINE)
+                m = re.search(r"^#\s+(.+)$", f.read_text(encoding="utf-8"), re.MULTILINE)
                 if m:
                     title = re.sub(r"^(KEY[\s-]?FINDINGS:?\s*)", "", m.group(1), flags=re.IGNORECASE)
                     return title.strip()
@@ -563,7 +576,7 @@ def _real_title(child: Path) -> str:
                 continue
     for md in sorted(child.glob("*.md")):
         try:
-            m = re.search(r"^#\s+(.+)$", md.read_text(), re.MULTILINE)
+            m = re.search(r"^#\s+(.+)$", md.read_text(encoding="utf-8"), re.MULTILINE)
             if m:
                 return m.group(1).strip()
         except Exception:
@@ -581,7 +594,7 @@ def _has_real_content(child: Path) -> bool:
         return True
     for md in child.glob("*.md"):
         try:
-            if re.search(r"^#\s+\S", md.read_text(), re.MULTILINE):
+            if re.search(r"^#\s+\S", md.read_text(encoding="utf-8"), re.MULTILINE):
                 return True
         except Exception:
             continue
@@ -670,7 +683,7 @@ def _extract_summary(child: Path) -> str:
         if not f.exists():
             continue
         try:
-            text = f.read_text()
+            text = f.read_text(encoding="utf-8")
         except Exception:
             continue
         # Drop the leading H1 and anything before it, then find the first

@@ -1,19 +1,34 @@
 # Copyright (c) 2026 Junjie Tang. MIT License. See LICENSE file for details.
 """Tests for arxiv_scanner module."""
 
+from datetime import datetime, timedelta, timezone
+from types import SimpleNamespace
+
 import pytest
-from scripts.arxiv_scanner import ArxivScanner
+
+from scripts import arxiv_scanner
+
+# With deepxiv-sdk installed the module rebinds ArxivScanner to DeepXivScanner;
+# these tests target the legacy arXiv API scanner either way.
+ArxivScanner = getattr(arxiv_scanner, "_OriginalArxivScanner", arxiv_scanner.ArxivScanner)
 
 
-SAMPLE_ARXIV_XML = """<?xml version="1.0" encoding="UTF-8"?>
+def _iso(days_ago: int) -> str:
+    return (datetime.now(timezone.utc) - timedelta(days=days_ago)).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def _sample_xml() -> str:
+    """Atom feed with a recent entry, a stale entry and an undated entry."""
+    recent, old = _iso(1), _iso(400)
+    return f"""<?xml version="1.0" encoding="UTF-8"?>
 <feed xmlns="http://www.w3.org/2005/Atom">
   <title>ArXiv Query</title>
   <entry>
     <id>http://arxiv.org/abs/2401.00001v1</id>
     <title>Evaluating Multi-Agent Systems</title>
     <summary>We propose a benchmark for agent evaluation.</summary>
-    <published>2026-03-05T00:00:00Z</published>
-    <updated>2026-03-05T00:00:00Z</updated>
+    <published>{recent}</published>
+    <updated>{recent}</updated>
     <author><name>Alice Smith</name></author>
     <author><name>Bob Jones</name></author>
     <category term="cs.AI"/>
@@ -24,8 +39,8 @@ SAMPLE_ARXIV_XML = """<?xml version="1.0" encoding="UTF-8"?>
     <id>http://arxiv.org/abs/2401.00002v1</id>
     <title>Old Paper on Something</title>
     <summary>This is an old paper.</summary>
-    <published>2020-01-01T00:00:00Z</published>
-    <updated>2020-01-01T00:00:00Z</updated>
+    <published>{old}</published>
+    <updated>{old}</updated>
     <author><name>Charlie</name></author>
     <category term="cs.AI"/>
   </entry>
@@ -43,40 +58,46 @@ def scanner():
     return ArxivScanner(topics=["Agent Evaluation"], days_back=7, max_results=10)
 
 
-class TestParseArxivResponse:
-    def test_parses_valid_entry(self, scanner):
-        from datetime import datetime, timedelta, timezone
-        start_date = datetime.now(timezone.utc) - timedelta(days=30)
-        papers = scanner._parse_arxiv_response(SAMPLE_ARXIV_XML, start_date)
-        # Should include the 2026 paper, might include the 2020 one depending on start_date
-        assert len(papers) >= 1
+def _search(scanner, monkeypatch, body: str):
+    """Run search_topic against a canned API response (no network)."""
+    monkeypatch.setattr(scanner, "_throttled_get", lambda params: SimpleNamespace(text=body))
+    return scanner.search_topic("Agent Evaluation")
+
+
+class TestSearchTopicParsing:
+    def test_parses_valid_entry(self, scanner, monkeypatch):
+        papers = _search(scanner, monkeypatch, _sample_xml())
         paper = papers[0]
         assert paper["title"] == "Evaluating Multi-Agent Systems"
         assert paper["authors"] == ["Alice Smith", "Bob Jones"]
         assert "cs.AI" in paper["categories"]
         assert paper["pdf_link"] == "http://arxiv.org/pdf/2401.00001v1"
+        assert paper["source"] == "arxiv_api"
 
-    def test_filters_by_date(self, scanner):
-        from datetime import datetime, timedelta, timezone
-        # Start date after the old paper
-        start_date = datetime(2025, 1, 1, tzinfo=timezone.utc)
-        papers = scanner._parse_arxiv_response(SAMPLE_ARXIV_XML, start_date)
-        titles = [p["title"] for p in papers]
+    def test_filters_by_date(self, scanner, monkeypatch):
+        titles = [p["title"] for p in _search(scanner, monkeypatch, _sample_xml())]
         assert "Evaluating Multi-Agent Systems" in titles
         assert "Old Paper on Something" not in titles
 
-    def test_skips_entries_without_date(self, scanner):
-        from datetime import datetime, timezone
-        start_date = datetime(2020, 1, 1, tzinfo=timezone.utc)
-        papers = scanner._parse_arxiv_response(SAMPLE_ARXIV_XML, start_date)
-        titles = [p["title"] for p in papers]
-        assert "No Date Paper" not in titles
+    def test_keeps_entries_without_date(self, scanner, monkeypatch):
+        # An entry with neither <updated> nor <published> cannot be judged stale,
+        # so the scanner keeps it rather than silently dropping it.
+        titles = [p["title"] for p in _search(scanner, monkeypatch, _sample_xml())]
+        assert "No Date Paper" in titles
 
-    def test_handles_malformed_xml(self, scanner):
-        from datetime import datetime, timezone
-        start_date = datetime(2020, 1, 1, tzinfo=timezone.utc)
-        papers = scanner._parse_arxiv_response("not xml", start_date)
-        assert papers == []
+    def test_handles_malformed_xml(self, scanner, monkeypatch):
+        assert _search(scanner, monkeypatch, "not xml") == []
+
+    def test_quotes_multi_word_topic(self, scanner, monkeypatch):
+        seen = {}
+
+        def fake_get(params):
+            seen.update(params)
+            return SimpleNamespace(text=_sample_xml())
+
+        monkeypatch.setattr(scanner, "_throttled_get", fake_get)
+        scanner.search_topic("Agent Evaluation")
+        assert seen["search_query"] == 'all:"Agent Evaluation"'
 
 
 class TestScanAllTopics:
