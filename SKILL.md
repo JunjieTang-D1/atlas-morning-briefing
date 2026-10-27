@@ -26,10 +26,12 @@ triggers:
 requires:
   python: ">=3.10"
   env:
-    required:
+    # No key is required: each missing key only skips its section (papers and
+    # blogs need none). See scripts/config_validator.py.
+    required: []
+    optional:
       - FINNHUB_API_KEY
       - BRAVE_API_KEY
-    optional:
       - GMAIL_USER
       - GMAIL_APP_PASSWORD
       - AWS_ACCESS_KEY_ID
@@ -121,7 +123,9 @@ pip install -e .
 
 ### 2. Configure API Keys
 
-Set environment variables:
+All keys are optional. Without `FINNHUB_API_KEY` the stock section is skipped,
+without `BRAVE_API_KEY` the news section is skipped; papers and blogs need no key.
+Set the ones you have as environment variables (or in `.env`):
 
 ```bash
 export FINNHUB_API_KEY="your_finnhub_key"

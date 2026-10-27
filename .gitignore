@@ -45,4 +45,8 @@ logs/*.log
 !CHANGELOG.md
 !examples/*.md
 !references/*.md
+# Source folders: their docs are hand-written, never generated briefings
+!apps/**/*.md
+!integrations/**/*.md
+!experiments/**/*.md
 atlas-morning-briefing.json

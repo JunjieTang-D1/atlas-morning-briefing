@@ -20,7 +20,7 @@ from scripts.arxiv_scanner import ArxivScanner
 from scripts.paper_scorer import PaperScorer
 from scripts.bedrock_client import BedrockClient
 from scripts.intelligence import BriefingIntelligence
-from scripts.workers.base_worker import BaseWorker
+from experiments.workers.base_worker import BaseWorker
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s)")
 logger = logging.getLogger(__name__)

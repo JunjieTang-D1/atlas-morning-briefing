@@ -146,9 +146,12 @@ pdf:
   include_emoji: false
 
 # Amazon Bedrock configuration
-# Set enabled: false to run in deterministic mode (no LLM, zero cost)
+# Off by default: the pipeline runs in deterministic mode (no LLM, zero cost).
+# Set enabled: true for AI summaries and synthesis. That needs AWS credentials
+# with Bedrock model access in `region` and costs ~$0.40-0.80 per run with the
+# models below.
 bedrock:
-  enabled: true
+  enabled: false
   region: "us-east-1"
   temperature: 0.3
   max_tokens: 2048

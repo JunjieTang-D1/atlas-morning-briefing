@@ -31,9 +31,9 @@ import yaml
 # Ensure scripts directory is on path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from scripts.workers.papers_worker import PapersWorker
-from scripts.workers.blogs_worker import BlogsWorker
-from scripts.workers.news_market_worker import NewsMarketWorker
+from experiments.workers.papers_worker import PapersWorker
+from experiments.workers.blogs_worker import BlogsWorker
+from experiments.workers.news_market_worker import NewsMarketWorker
 from scripts.bedrock_client import BedrockClient
 from scripts.pdf_generator import PDFGenerator
 from scripts.email_distributor import EmailDistributor

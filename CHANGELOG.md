@@ -2,6 +2,23 @@
 
 All notable changes to Atlas Morning Briefing will be documented in this file.
 
+## [Unreleased]
+
+### Added
+- Kiro Crew script cron `integrations/kirocrew/atlas_briefing_cron.py` (macOS, Linux, Windows)
+- Windows install and run instructions in `README.md` and `references/kirocrew_setup.md`
+
+### Changed
+- `config.yaml.example` ships with `bedrock.enabled: false` (zero-cost first run)
+- `SKILL.md`: `FINNHUB_API_KEY` and `BRAVE_API_KEY` are optional, matching `config_validator.py`
+- Dashboard app paths come from `ATLAS_HOME` / `ATLAS_ARTIFACTS_HOME` / `ATLAS_RESEARCH_HOME`
+- v0.2 runner, `workers/` and benchmark scripts moved from `scripts/` to `experiments/`
+  (unmaintained, see `experiments/README.md`)
+
+### Fixed
+- Stale arXiv parser tests that called the removed `_parse_arxiv_response`
+- `.gitignore` no longer hides markdown under `apps/`, `integrations/`, `experiments/`
+
 ## [0.2.0] - 2026-04-09
 
 ### Added

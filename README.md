@@ -64,6 +64,17 @@ pip install -r requirements.txt
 pip install deepxiv-sdk  # optional but recommended
 ```
 
+Windows (PowerShell):
+
+```powershell
+git clone https://github.com/JunjieTang-D1/atlas-morning-briefing.git
+cd atlas-morning-briefing
+py -3 -m venv venv
+.\venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+pip install deepxiv-sdk  # optional but recommended
+```
+
 ### Configure
 
 1. Copy the example config:
@@ -89,7 +100,8 @@ kindle_email: "YOUR_NAME@kindle.com"
 sender_email: "your-sender@gmail.com"
 ```
 
-3. Set environment variables:
+3. Set the API keys you have. All are optional: a missing key only skips its
+   section (stocks, news, or email delivery). Papers and blogs need no key.
 
 ```bash
 export FINNHUB_API_KEY="your_finnhub_key"
@@ -97,6 +109,10 @@ export BRAVE_API_KEY="your_brave_search_key"
 export GMAIL_USER="your_email@gmail.com"
 export GMAIL_APP_PASSWORD="your_app_password"
 ```
+
+On Windows use `$env:FINNHUB_API_KEY = "your_finnhub_key"` and so on. Alternatively, put
+the same `KEY=value` lines in a `.env` file in the repo root (gitignored): `run_briefing.sh`
+and the Kiro Crew cron both load it.
 
 See `references/config_guide.md` for all configuration options.
 See `references/kirocrew_setup.md` to install and schedule this as a KiroCrew skill.
@@ -112,16 +128,24 @@ python3 scripts/briefing_runner.py --config config.yaml
 
 # Debug logging
 python3 scripts/briefing_runner.py --config config.yaml --log-level DEBUG
+
+# Wrapper: activates venv, loads .env, single-run lock (macOS/Linux, bash)
+./run_briefing.sh --dry-run
 ```
 
-### Schedule (cron)
+On Windows run `python scripts\briefing_runner.py --config config.yaml --dry-run` from the
+activated venv; `run_briefing.sh` is bash-only.
+
+### Schedule
 
 ```bash
-# Every day at 6:50 AM CET
+# cron (macOS/Linux): every day at 6:50 AM CET
 50 5 * * * /path/to/atlas-morning-briefing/run_briefing.sh >> /path/to/logs/briefing.log 2>&1
 ```
 
 See `references/kindle_setup.md` for the wrapper script and Kindle email setup.
+On any OS, including Windows, you can schedule it as a zero-token Kiro Crew script cron
+instead: see `references/kirocrew_setup.md`.
 
 ## Project Structure
 
@@ -130,6 +154,7 @@ atlas-morning-briefing/
 ├── config.yaml.example            # Template config (copy to config.yaml)
 ├── pyproject.toml                 # Package metadata and dependencies
 ├── requirements.txt               # Pinned dependencies
+├── run_briefing.sh                # Wrapper: venv + .env + single-run lock (bash)
 ├── scripts/
 │   ├── briefing_runner.py         # Main orchestrator — CLI, parallel fetch, markdown generation
 │   ├── arxiv_scanner.py           # DeepXiv SDK semantic search (ArXiv API fallback)
@@ -141,19 +166,26 @@ atlas-morning-briefing/
 │   ├── bedrock_client.py          # Amazon Bedrock client — tiered models, call budgeting
 │   ├── pdf_generator.py           # Markdown → PDF (ReportLab) — Kindle/A4/Letter formats
 │   ├── email_distributor.py       # Gmail SMTP — Kindle PDF + HTML email distribution
+│   ├── send_briefing_telegram.py  # Telegram delivery of the newest briefing
 │   ├── config_validator.py        # Startup validation for config + environment variables
 │   └── __init__.py
-├── tests/                         # 105 unit tests (pytest)
+├── integrations/kirocrew/
+│   └── atlas_briefing_cron.py     # Kiro Crew script cron (macOS/Linux/Windows)
+├── apps/atlas-briefing/           # Kiro Crew dashboard app (read-only)
+├── experiments/                   # Unmaintained v0.2 runner + benchmarks (see its README)
+├── tests/                         # pytest suite
 │   ├── test_arxiv_scanner.py
 │   ├── test_briefing_runner.py
 │   ├── test_config_validator.py
 │   ├── test_dedup_papers.py
 │   ├── test_intelligence.py
+│   ├── test_kirocrew_cron.py
 │   ├── test_paper_scorer.py
 │   └── test_pdf_generator.py
 ├── references/
 │   ├── config_guide.md            # Complete config reference
-│   └── kindle_setup.md            # Kindle email delivery setup
+│   ├── kindle_setup.md            # Kindle email delivery setup
+│   └── kirocrew_setup.md          # Install + schedule with Kiro Crew
 ├── examples/
 │   └── sample-briefing.md         # Sample generated briefing
 ├── assets/
@@ -212,16 +244,17 @@ bedrock:
 | Nova Pro | `amazon.nova-pro-v1:0` |
 | Nova Lite | `amazon.nova-lite-v1:0` |
 
-### Disable Bedrock
+### Enable or Disable Bedrock
 
-Run without any LLM features (zero cost, fully deterministic):
+`config.yaml.example` ships with Bedrock **off**, so a first run needs no AWS setup and
+costs nothing. Turn it on once you have AWS credentials with Bedrock model access:
 
 ```yaml
 bedrock:
-  enabled: false
+  enabled: true
 ```
 
-The pipeline still fetches data, scores papers via TF-IDF, generates the PDF, and delivers it — just without LLM summaries, synthesis, or semantic scoring.
+With `enabled: false` the pipeline still fetches data, scores papers via TF-IDF, generates the PDF, and delivers it — just without LLM summaries, synthesis, or semantic scoring.
 
 ## Paper Scoring
 
@@ -290,7 +323,7 @@ pip install -e ".[dev]"
 pytest tests/ -v
 ```
 
-105 tests covering scanners, scoring, deduplication, PDF generation, intelligence layer, and config validation.
+116 tests covering scanners, scoring, deduplication, PDF generation, intelligence layer, config validation, and the Kiro Crew cron.
 
 ## Example Output
 
