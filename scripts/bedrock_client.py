@@ -30,7 +30,7 @@ class BedrockClient:
     # Use cross-region inference profile IDs (us.*) for broad region support.
     # On-demand IDs (e.g. amazon.nova-lite-v1:0) are not available in all regions.
     DEFAULT_MODELS = {
-        "heavy": "us.anthropic.claude-sonnet-4-20250514-v1:0",
+        "heavy": "us.anthropic.claude-sonnet-5-5",
         "medium": "us.amazon.nova-pro-v1:0",
         "light": "us.amazon.nova-lite-v1:0",
     }

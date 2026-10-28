@@ -36,42 +36,64 @@ cp config.yaml.example config.yaml   # edit topics / stocks / delivery
 from any checkout. Override paths via env if needed:
 `ATLAS_HOME`, `ATLAS_ENV_FILE`, `ATLAS_VENV`, `ATLAS_CONFIG`.
 
+On Windows (PowerShell), create the venv with `py -3.12 -m venv venv` and install
+with `.\venv\Scripts\python.exe -m pip install -r requirements.txt`.
+
 ## Verify it runs
 
 ```bash
 # Dry run: build the PDF locally, no email/Telegram delivery
 ./run_briefing.sh --dry-run
+# Windows (run_briefing.sh is bash-only):
+#   .\venv\Scripts\python.exe scripts\briefing_runner.py --config config.yaml --dry-run
 ```
 
 ## Schedule it in KiroCrew (zero LLM tokens)
 
-The pipeline is deterministic, so schedule it with a **`command=` cron** -- this runs
-the shell directly and costs **zero KiroCrew LLM tokens** (no agent turn is spawned).
+The pipeline is deterministic, so schedule it with a **script cron**: KiroCrew runs a
+Python function directly and spawns no agent turn, so it costs **zero LLM tokens**.
+`integrations/kirocrew/atlas_briefing_cron.py` works on macOS, Linux and Windows. It
+runs the pipeline from the repo's `venv`, loads `$ATLAS_HOME/.env`, and reports the
+newest PDF plus the run counts to the dashboard.
 
-Register with the `cron_add` MCP tool:
+```bash
+# 1. Script crons must live in the KiroCrew crons folder
+mkdir -p ~/.kiro/crew/crons
+cp integrations/kirocrew/atlas_briefing_cron.py ~/.kiro/crew/crons/
 
-```
-cron_add(
-  name    = "morning-briefing",
-  command = "/ABSOLUTE/PATH/TO/atlas-morning-briefing/run_briefing.sh",
-  cron_expr = "50 6 * * *",       # 06:50 daily (set timezone below)
-  timezone  = "Europe/Berlin",
-  timeout   = 600,                 # pipeline runs ~10-60s + LLM calls
-)
+# 2. Try it once (runs the real pipeline, prints the report)
+kirocrew cron preview "~/.kiro/crew/crons/atlas_briefing_cron.py:run" -m ""
+
+# 3. Register: daily 06:50 Berlin time, dry run (PDF only)
+kirocrew cron add "atlas-briefing" "" --cron "50 6 * * *" --timezone Europe/Berlin \
+  --script "~/.kiro/crew/crons/atlas_briefing_cron.py:run" \
+  --timeout 900 --timeout-secs 960 --no-persistent-session --minimal-context
 ```
 
 Notes:
-- Use an **absolute path** to `run_briefing.sh`.
-- The script loads `$ATLAS_HOME/.env` automatically, so the cron does not need the
-  API keys in its own environment -- they live in the gitignored `.env`.
-- For delivery through KiroCrew instead of Gmail/Telegram, run with `--dry-run` in the
-  cron and have an agent `file_send` the newest `Atlas-Briefing-*.pdf` (see "Delivery").
+- The cron message selects the mode: `deliver` sends email/Kindle, anything else
+  (including `""`) is a dry run.
+- The repo is expected at `~/atlas-morning-briefing`. For another location set
+  `ATLAS_HOME` in the gateway environment (`~/.kiro/crew/.env`) or edit
+  `DEFAULT_ATLAS_HOME` in the copied script.
+- KiroCrew expands the quoted `~` itself, so the same commands work in PowerShell
+  (use `New-Item`/`Copy-Item` for step 1).
+- A `command=` cron pointing at `run_briefing.sh` also works on macOS/Linux, but
+  KiroCrew refuses command crons on Windows (they need a POSIX `/bin/sh`).
+- For delivery through KiroCrew instead of Gmail/Telegram, keep the dry run and have an
+  agent `file_send` the newest PDF (see "Delivery").
+
+## Dashboard app (optional)
+
+`apps/atlas-briefing` adds a read-only dashboard page. See its `README.md` for
+install, trust, and the `ATLAS_HOME` / `ATLAS_ARTIFACTS_HOME` /
+`ATLAS_RESEARCH_HOME` path variables.
 
 ## Delivery options
 
 | Channel | How | Secrets |
 |---|---|---|
-| Kindle / email | default (`run_briefing.sh` with no `--dry-run`) | `GMAIL_USER`, `GMAIL_APP_PASSWORD` |
+| Kindle / email | `run_briefing.sh` with no `--dry-run`, or cron message `deliver` | `GMAIL_USER`, `GMAIL_APP_PASSWORD` |
 | Telegram | `python3 scripts/send_briefing_telegram.py --chat-id <id>` | `TELEGRAM_BOT_TOKEN` (+ `--chat-id` or `TELEGRAM_CHAT_ID`) |
 | KiroCrew (PDF to dashboard/outbox) | run `--dry-run`, then `file_send` the newest PDF | none |
 

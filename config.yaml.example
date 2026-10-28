@@ -146,16 +146,19 @@ pdf:
   include_emoji: false
 
 # Amazon Bedrock configuration
-# Set enabled: false to run in deterministic mode (no LLM, zero cost)
+# Off by default: the pipeline runs in deterministic mode (no LLM, zero cost).
+# Set enabled: true for AI summaries and synthesis. That needs AWS credentials
+# with Bedrock model access in `region`. Cost was ~$0.40-0.80 per run with the
+# previous heavy default (Claude Sonnet 4); check current Bedrock pricing.
 bedrock:
-  enabled: true
+  enabled: false
   region: "us-east-1"
   temperature: 0.3
   max_tokens: 2048
   # Use cross-region inference profile IDs (us.*) for broad region support.
   # On-demand IDs (e.g. amazon.nova-lite-v1:0) may not work in all regions.
   models:
-    heavy: "us.anthropic.claude-sonnet-4-20250514-v1:0"
+    heavy: "us.anthropic.claude-sonnet-5-5"
     medium: "us.amazon.nova-pro-v1:0"
     light: "us.amazon.nova-lite-v1:0"
   # Maximum LLM calls per run (default: 20). The intelligence layer makes

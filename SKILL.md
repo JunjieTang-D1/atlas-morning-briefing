@@ -26,10 +26,12 @@ triggers:
 requires:
   python: ">=3.10"
   env:
-    required:
+    # No key is required: each missing key only skips its section (papers and
+    # blogs need none). See scripts/config_validator.py.
+    required: []
+    optional:
       - FINNHUB_API_KEY
       - BRAVE_API_KEY
-    optional:
       - GMAIL_USER
       - GMAIL_APP_PASSWORD
       - AWS_ACCESS_KEY_ID
@@ -121,7 +123,9 @@ pip install -e .
 
 ### 2. Configure API Keys
 
-Set environment variables:
+All keys are optional. Without `FINNHUB_API_KEY` the stock section is skipped,
+without `BRAVE_API_KEY` the news section is skipped; papers and blogs need no key.
+Set the ones you have as environment variables (or in `.env`):
 
 ```bash
 export FINNHUB_API_KEY="your_finnhub_key"
@@ -166,7 +170,7 @@ sender_email: "YOUR_EMAIL@gmail.com"
 bedrock:
   enabled: true
   models:
-    heavy: "us.anthropic.claude-sonnet-4-20250514-v1:0"
+    heavy: "us.anthropic.claude-sonnet-5-5"
     medium: "amazon.nova-pro-v1:0"
     light: "amazon.nova-lite-v1:0"
 ```
@@ -274,7 +278,7 @@ For lower cost (~$0.08/run, ~$2.45/month), switch to tiered models in `config.ya
 ```yaml
 bedrock:
   models:
-    heavy: "us.anthropic.claude-sonnet-4-20250514-v1:0"
+    heavy: "us.anthropic.claude-sonnet-5-5"
     medium: "amazon.nova-pro-v1:0"
     light: "amazon.nova-lite-v1:0"
 ```

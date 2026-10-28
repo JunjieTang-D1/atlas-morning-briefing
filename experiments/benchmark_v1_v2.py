@@ -64,7 +64,7 @@ class BenchmarkRunner:
         # Run v0.2
         logger.info("\n=== Running v0.2 (coordinator + parallel workers) ===")
         v2_results = self._run_version(
-            script="scripts/briefing_runner_v2.py",
+            script="experiments/briefing_runner_v2.py",
             output_file="Atlas-Briefing-v0.2.md",
             version="v0.2"
         )
